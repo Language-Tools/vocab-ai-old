@@ -52,6 +52,7 @@ __all__ = [
     "NumberField",
     "RatingField",
     "LongTextField",
+    "TranslationField",
     "BooleanField",
     "DateField",
     "LinkRowField",
