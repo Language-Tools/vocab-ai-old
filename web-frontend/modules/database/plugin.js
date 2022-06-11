@@ -23,6 +23,11 @@ import {
   FormulaFieldType,
   LookupFieldType,
 } from '@baserow/modules/database/fieldTypes'
+
+import {
+  TranslationFieldType
+} from '@baserow/modules/database/vocabAiFieldTypes'
+
 import {
   EqualViewFilterType,
   NotEqualViewFilterType,
@@ -289,6 +294,9 @@ export default (context) => {
   app.$registry.register('field', new PhoneNumberFieldType(context))
   app.$registry.register('field', new FormulaFieldType(context))
   app.$registry.register('field', new LookupFieldType(context))
+
+  app.$registry.register('field', new TranslationFieldType(context))
+
   app.$registry.register('importer', new CSVImporterType(context))
   app.$registry.register('importer', new PasteImporterType(context))
   app.$registry.register('importer', new XMLImporterType(context))
