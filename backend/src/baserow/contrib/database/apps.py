@@ -162,6 +162,9 @@ class DatabaseConfig(AppConfig):
             FormulaFieldType,
             LookupFieldType,
         )
+        from .fields.vocabai_fieldtypes import (
+            TranslationFieldType
+        )
 
         field_type_registry.register(TextFieldType())
         field_type_registry.register(LongTextFieldType())
@@ -180,6 +183,7 @@ class DatabaseConfig(AppConfig):
         field_type_registry.register(PhoneNumberFieldType())
         field_type_registry.register(FormulaFieldType())
         field_type_registry.register(LookupFieldType())
+        field_type_registry.register(TranslationFieldType())
 
         from .fields.field_converters import (
             LinkRowFieldConverter,
