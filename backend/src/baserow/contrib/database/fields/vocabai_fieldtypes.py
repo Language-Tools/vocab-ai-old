@@ -18,9 +18,19 @@ class TranslationFieldType(FieldType):
         return value
 
     def get_serializer_field(self, instance, **kwargs):
-        return serializers.CharField()
+        return serializers.CharField(
+            **{
+                "required": True,
+                "allow_null": False,
+                "allow_blank": False,
+                **kwargs,
+            }        
+        )
 
     def get_model_field(self, instance, **kwargs):
         return models.TextField(
-             blank=True, null=True, **kwargs
+            default=instance.source_field or None,
+            blank=False, 
+            null=False, 
+            **kwargs
         )

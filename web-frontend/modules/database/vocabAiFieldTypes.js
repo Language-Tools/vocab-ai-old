@@ -1,9 +1,9 @@
 import { FieldType } from '@baserow/modules/database/fieldTypes'
 
-import FieldTextSubForm from '@baserow/modules/database/components/field/FieldTextSubForm'
 import GridViewFieldText from '@baserow/modules/database/components/view/grid/fields/GridViewFieldText'
 import RowEditFieldText from '@baserow/modules/database/components/row/RowEditFieldText'
 import VocabAiTranslationSubForm from '@baserow/modules/database/components/field/VocabAiTranslationSubForm'
+import FunctionalGridViewFieldText from '@baserow/modules/database/components/view/grid/fields/FunctionalGridViewFieldText'
 
 export class TranslationFieldType extends FieldType {
   static getType() {
@@ -29,4 +29,9 @@ export class TranslationFieldType extends FieldType {
   getRowEditFieldComponent() {
     return RowEditFieldText
   }
+
+  getFunctionalGridViewFieldComponent() {
+    return FunctionalGridViewFieldText
+  }
+
 }
