@@ -29,7 +29,7 @@ class TranslationFieldType(FieldType):
 
     def get_model_field(self, instance, **kwargs):
         return models.TextField(
-            default=instance.source_field or None,
+            default=None,
             blank=False, 
             null=False, 
             **kwargs
