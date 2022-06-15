@@ -260,8 +260,6 @@ class FieldHandler:
         # Add the field to the table schema.
         with safe_django_schema_editor() as schema_editor:
             to_model = instance.table.get_model(field_ids=[], fields=[instance])
-            logger.info(f'***!!! to_model: {to_model}')
-            logger.info(f'***!!! instance.db_column: {instance.db_column}')
 
             model_field = to_model._meta.get_field(instance.db_column)
 
