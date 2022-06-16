@@ -71,8 +71,6 @@ class TranslationFieldType(FieldType):
             translated_value,
             via_path_to_starting_table=via_path_to_starting_table,
         )        
-        # update_collector.apply_updates_and_get_updated_fields()
-        ViewHandler().field_value_updated(field)
 
         super().row_of_dependency_updated(
             field,
