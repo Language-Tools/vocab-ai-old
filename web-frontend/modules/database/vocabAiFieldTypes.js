@@ -34,4 +34,16 @@ export class TranslationFieldType extends FieldType {
     return FunctionalGridViewFieldText
   }
 
+  getDocsDataType(field) {
+    return 'string'
+  }
+
+  getDocsDescription(field) {
+    return this.app.i18n.t('fieldDocs.text')
+  }
+
+  getDocsRequestExample(field) {
+    return 'string'
+  }  
+
 }
