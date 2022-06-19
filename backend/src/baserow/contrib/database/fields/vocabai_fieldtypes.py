@@ -71,19 +71,20 @@ class TranslationFieldType(FieldType):
         source_value = getattr(starting_row, field.source_field)
 
         # add translation logic here:
-        translated_value = 'translation: ' + source_value
+        # translated_value = 'translation: ' + source_value
 
         # logger.info(f'starting_row: {starting_row} vars: {vars(starting_row)}')
 
         table_id = field.table.id
         row_id = starting_row.id
-        run_cloudlanguagetoools.delay(source_value, table_id, row_id, field.source_field)
+        field_id = f'field_{field.id}'
+        run_cloudlanguagetoools.delay(source_value, table_id, row_id, field_id)
 
-        update_collector.add_field_with_pending_update_statement(
-            field,
-            translated_value,
-            via_path_to_starting_table=via_path_to_starting_table,
-        )        
+        # update_collector.add_field_with_pending_update_statement(
+        #     field,
+        #     translated_value,
+        #     via_path_to_starting_table=via_path_to_starting_table,
+        # )        
 
         super().row_of_dependency_updated(
             field,
