@@ -1,9 +1,11 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from baserow.contrib.database.fields.field_cache import FieldCache
 
 from rest_framework import serializers
 
 from baserow.contrib.database.fields.registries import FieldType
+from baserow.contrib.database.fields.models import Field
 from baserow.contrib.database.views.handler import ViewHandler
 
 from .vocabai_models import TranslationField
@@ -44,9 +46,17 @@ class TranslationFieldType(FieldType):
             **kwargs
         )
 
-    def get_field_dependencies(self, field_instance, field_lookup_cache):
-        logger.info(f'get_field_dependencies')
-        return [field_instance.source_field]
+    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
+        # logger.info(f'get_field_dependencies')
+        table_model = field_lookup_cache.get_model(field_instance.table)
+        candidates = [field for field in table_model._meta.fields if field.name == field_instance.source_field]
+        if len(candidates) != 1:
+            raise Exception(f'could not find {field_instance.source_field} in table {table_model}')
+        field = candidates[0]
+        result = [field.verbose_name]
+        logger.info(f'result: {result}')
+        return result
+
 
     def row_of_dependency_updated(
         self,
@@ -55,16 +65,11 @@ class TranslationFieldType(FieldType):
         update_collector,
         via_path_to_starting_table,
     ):
-        logger.info(f'row_of_dependency_updated, row: {starting_row}, {type(starting_row)}')
+        # logger.info(f'row_of_dependency_updated, row: {starting_row} vars: {vars(starting_row)}')
+        source_value = getattr(starting_row, field.source_field)
 
-        # source_value = getattr(starting_row, field.source_field)
-        source_value = getattr(starting_row, 'field_1992')
+        # add translation logic here:
         translated_value = 'translation: ' + source_value
-        
-        logger.info(f'translated_value: {translated_value}')
-
-        logger.info(f'update_collector: {update_collector} type: {type(update_collector)}')
-
 
         update_collector.add_field_with_pending_update_statement(
             field,
