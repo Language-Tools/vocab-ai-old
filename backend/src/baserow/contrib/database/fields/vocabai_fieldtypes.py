@@ -10,6 +10,8 @@ from baserow.contrib.database.views.handler import ViewHandler
 
 from .vocabai_models import TranslationField
 
+from .tasks import run_cloudlanguagetoools
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -65,11 +67,17 @@ class TranslationFieldType(FieldType):
         update_collector,
         via_path_to_starting_table,
     ):
-        # logger.info(f'row_of_dependency_updated, row: {starting_row} vars: {vars(starting_row)}')
+        logger.info(f'row_of_dependency_updated, row: {starting_row} vars: {vars(starting_row)}')
         source_value = getattr(starting_row, field.source_field)
 
         # add translation logic here:
         translated_value = 'translation: ' + source_value
+
+        # logger.info(f'starting_row: {starting_row} vars: {vars(starting_row)}')
+
+        table_id = field.table.id
+        row_id = starting_row.id
+        run_cloudlanguagetoools.delay(source_value, table_id, row_id, field.source_field)
 
         update_collector.add_field_with_pending_update_statement(
             field,
