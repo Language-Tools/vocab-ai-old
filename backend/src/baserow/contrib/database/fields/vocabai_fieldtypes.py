@@ -10,7 +10,7 @@ from baserow.contrib.database.views.handler import ViewHandler
 
 from .vocabai_models import TranslationField
 
-from .tasks import run_cloudlanguagetoools
+from .tasks import run_clt_translation, run_clt_translation_all_rows
 
 import logging
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class TranslationFieldType(FieldType):
         table_id = field.table.id
         row_id = starting_row.id
         field_id = f'field_{field.id}'
-        run_cloudlanguagetoools.delay(source_value, table_id, row_id, field_id)
+        run_clt_translation.delay(source_value, table_id, row_id, field_id)
 
         # update_collector.add_field_with_pending_update_statement(
         #     field,
@@ -93,3 +93,23 @@ class TranslationFieldType(FieldType):
             via_path_to_starting_table,
         )        
 
+    def after_update(
+        self,
+        from_field,
+        to_field,
+        from_model,
+        to_model,
+        user,
+        connection,
+        altered_column,
+        before,
+    ):
+        logger.info(f'after_update')
+
+        source_field_id = to_field.source_field
+        target_field_id = f'field_{to_field.id}'
+        table_id = to_field.table.id
+
+        logger.info(f'after_update table_id: {table_id} source_field_id: {source_field_id} target_field_id: {target_field_id}')
+
+        run_clt_translation_all_rows.delay(table_id, source_field_id, target_field_id)
