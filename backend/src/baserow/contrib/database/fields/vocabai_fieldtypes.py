@@ -102,6 +102,20 @@ class TranslationFieldType(FieldType):
         )        
 
 
+    def update_all_rows(self, field):
+        logger.info(f'update_all_rows')
+        source_field_id = f'field_{field.source_field.id}'
+        target_field_id = f'field_{field.id}'
+
+        table_id = field.table.id
+
+        logger.info(f'after_update table_id: {table_id} source_field_id: {source_field_id} target_field_id: {target_field_id}')
+
+        run_clt_translation_all_rows.delay(table_id, source_field_id, target_field_id)
+
+    def after_create(self, field, model, user, connection, before):
+        self.update_all_rows(field)
+
     def after_update(
         self,
         from_field,
@@ -113,13 +127,6 @@ class TranslationFieldType(FieldType):
         altered_column,
         before,
     ):
-        logger.info(f'after_update')
+        self.update_all_rows(to_field)
 
-        source_field_id = f'field_{to_field.source_field.id}'
-        target_field_id = f'field_{to_field.id}'
 
-        table_id = to_field.table.id
-
-        logger.info(f'after_update table_id: {table_id} source_field_id: {source_field_id} target_field_id: {target_field_id}')
-
-        run_clt_translation_all_rows.delay(table_id, source_field_id, target_field_id)
