@@ -11,9 +11,11 @@ from baserow.contrib.database.fields.models import Field
 # ./dev.sh run backend manage migrate database 0071
 
 class TranslationField(Field):
-    source_field = models.CharField(
-        max_length=255,
-        blank=False,
-        default="",
-        help_text="field to translate",
-    )
+    source_field = models.ForeignKey(
+        Field,
+        on_delete=models.CASCADE,
+        help_text="The field to translate.",
+        null=True,
+        blank=True,
+        related_name='+'
+    )    

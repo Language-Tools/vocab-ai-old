@@ -3,9 +3,9 @@
     <div class="control">
       <div class="control__elements">
         <input
-          ref="source_field"
-          v-model="values.source_field"
-          type="text"
+          ref="source_field_id"
+          v-model.number="values.source_field_id"
+          type="number"
           class="input"
           placeholder="Field to translate"
         />
@@ -24,9 +24,9 @@ export default {
   mixins: [form, fieldSubForm],
   data() {
     return {
-      allowedValues: ['source_field'],
+      allowedValues: ['source_field_id'],
       values: {
-        source_field: '',
+        source_field_id: '',
       },
     }
   },

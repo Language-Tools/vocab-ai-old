@@ -22,8 +22,20 @@ class TranslationTextField(models.TextField):
 class TranslationFieldType(FieldType):
     type = "translation"
     model_class = TranslationField
-    allowed_fields = ['source_field']
-    serializer_field_names = ['source_field']
+    allowed_fields = [
+        'source_field_id'
+    ]
+    serializer_field_names = [
+        'source_field_id'
+    ]
+    serializer_field_overrides = {
+        "source_field_id": serializers.IntegerField(
+            required=False,
+            allow_null=True,
+            source="source_field.id",
+            help_text="The id of the field to translate",
+        ),
+    }
 
     can_be_primary_field = False
 
@@ -50,15 +62,11 @@ class TranslationFieldType(FieldType):
 
     def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
         # logger.info(f'get_field_dependencies')
-        table_model = field_lookup_cache.get_model(field_instance.table)
-        candidates = [field for field in table_model._meta.fields if field.name == field_instance.source_field]
-        if len(candidates) != 1:
-            raise Exception(f'could not find {field_instance.source_field} in table {table_model}')
-        field = candidates[0]
-        result = [field.verbose_name]
-        logger.info(f'result: {result}')
+        result = []
+        if field_instance.source_field != None:
+            result = [field_instance.source_field.name]
+        logger.info(f'get_field_dependencies: result {result}')
         return result
-
 
     def row_of_dependency_updated(
         self,
@@ -67,12 +75,12 @@ class TranslationFieldType(FieldType):
         update_collector,
         via_path_to_starting_table,
     ):
-        logger.info(f'row_of_dependency_updated, row: {starting_row} vars: {vars(starting_row)}')
-        source_value = getattr(starting_row, field.source_field)
+        logger.info(f'row_of_dependency_updated, row: {starting_row} vars: {vars(starting_row)}, source_field: {vars(field.source_field)}')
+        source_internal_field_name = f'field_{field.source_field.id}'
+        source_value = getattr(starting_row, source_internal_field_name)
 
         # add translation logic here:
         # translated_value = 'translation: ' + source_value
-
         # logger.info(f'starting_row: {starting_row} vars: {vars(starting_row)}')
 
         table_id = field.table.id
@@ -93,6 +101,7 @@ class TranslationFieldType(FieldType):
             via_path_to_starting_table,
         )        
 
+
     def after_update(
         self,
         from_field,
@@ -106,8 +115,9 @@ class TranslationFieldType(FieldType):
     ):
         logger.info(f'after_update')
 
-        source_field_id = to_field.source_field
+        source_field_id = f'field_{to_field.source_field.id}'
         target_field_id = f'field_{to_field.id}'
+
         table_id = to_field.table.id
 
         logger.info(f'after_update table_id: {table_id} source_field_id: {source_field_id} target_field_id: {target_field_id}')
