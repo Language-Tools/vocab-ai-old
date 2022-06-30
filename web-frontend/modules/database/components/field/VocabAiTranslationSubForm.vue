@@ -1,15 +1,20 @@
 <template>
   <div>
     <div class="control">
-      <div class="control__elements">
-        <input
-          ref="source_field_id"
-          v-model.number="values.source_field_id"
-          type="number"
-          class="input"
-          placeholder="Field to translate"
-        />
-      </div>
+
+      <Dropdown
+        v-model="values.source_field_id"
+        @input="sourceFieldSelected"
+      >
+        <DropdownItem
+          v-for="field in tableFields"
+          :key="field.id"
+          :name="field.name"
+          :value="field.id"
+          :icon="field.icon"
+        ></DropdownItem>
+      </Dropdown>
+
     </div>
   </div>
 </template>
@@ -35,6 +40,15 @@ export default {
     isFormValid() {
       return true
     },
+    async sourceFieldSelected() {
+      console.log('source_field_id: ', this.values.source_field_id);
+    },    
   },
+  computed: {
+    tableFields() {
+      const fields = this.$store.getters['field/getAll']
+      return fields;
+    },
+  }  
 }
 </script>
