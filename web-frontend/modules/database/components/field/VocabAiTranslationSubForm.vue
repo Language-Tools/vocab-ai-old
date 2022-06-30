@@ -46,8 +46,13 @@ export default {
   },
   computed: {
     tableFields() {
+      const primaryField = this.$store.getters['field/getPrimary'];
       const fields = this.$store.getters['field/getAll']
-      return fields;
+
+      let allFields = [primaryField];
+      allFields = allFields.concat(fields);
+
+      return allFields;
     },
   }  
 }
