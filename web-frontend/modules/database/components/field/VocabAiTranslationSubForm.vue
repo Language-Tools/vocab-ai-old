@@ -46,6 +46,7 @@ export default {
   },
   computed: {
     tableFields() {
+      // collect all fields, including primary field in this table
       const primaryField = this.$store.getters['field/getPrimary'];
       const fields = this.$store.getters['field/getAll']
 
