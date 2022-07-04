@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Callable
 
 from django.db.models import Expression
 
@@ -13,6 +13,9 @@ from baserow.contrib.database.table.models import GeneratedTableModel, Table
 class PathBasedUpdateStatementCollector:
     def __init__(self, table: Table, field_cache: FieldCache):
         self.update_statements: Dict[str, Expression] = {}
+        self.python_cell_update_functions: Dict[
+            str, Callable[[List[GeneratedTableModel]], None]
+        ] = {}
         self.table = table
         self.sub_paths: Dict[str, PathBasedUpdateStatementCollector] = {}
         self.field_cache = field_cache
@@ -28,18 +31,38 @@ class PathBasedUpdateStatementCollector:
                 raise InvalidViaPath()
             self.update_statements[field.db_column] = update_statement
         else:
-            next_via_field_link = path_from_starting_table[0]
-            if next_via_field_link.link_row_table != self.table:
-                raise InvalidViaPath()
-            next_link_db_column = next_via_field_link.db_column
-            if next_link_db_column not in self.sub_paths:
-                self.sub_paths[next_link_db_column] = PathBasedUpdateStatementCollector(
-                    next_via_field_link.table,
-                    self.field_cache,
-                )
-            self.sub_paths[next_link_db_column].add_update_statement(
+            sub_path = self._get_or_create_sub_path(path_from_starting_table)
+            sub_path.add_update_statement(
                 field, update_statement, path_from_starting_table[1:]
             )
+
+    def add_python_cell_update_function(
+        self,
+        field: Field,
+        func: Callable[[List[GeneratedTableModel]], None],
+        path_from_starting_table: Optional[List[LinkRowField]] = None,
+    ):
+        if not path_from_starting_table:
+            if self.table != field.table:
+                raise InvalidViaPath()
+            self.python_cell_update_functions[field.db_column] = func
+        else:
+            sub_path = self._get_or_create_sub_path(path_from_starting_table)
+            sub_path.add_python_cell_update_function(
+                field, func, path_from_starting_table[1:]
+            )
+
+    def _get_or_create_sub_path(self, path_from_starting_table):
+        next_via_field_link = path_from_starting_table[0]
+        if next_via_field_link.link_row_table != self.table:
+            raise InvalidViaPath()
+        next_link_db_column = next_via_field_link.db_column
+        if next_link_db_column not in self.sub_paths:
+            self.sub_paths[next_link_db_column] = PathBasedUpdateStatementCollector(
+                next_via_field_link.table,
+                self.field_cache,
+            )
+        return self.sub_paths[next_link_db_column]
 
     def execute_all(
         self,
@@ -69,7 +92,28 @@ class PathBasedUpdateStatementCollector:
             if isinstance(starting_row_id, list):
                 path_to_starting_table_id_column += "__in"
             qs = qs.filter(**{path_to_starting_table_id_column: starting_row_id})
+
+        if self.python_cell_update_functions:
+            rows_to_bulk_update = [row for row in qs]
+            for field_name, func in self.python_cell_update_functions.items():
+                func(rows_to_bulk_update)
+            model.objects_and_trash.bulk_update(
+                rows_to_bulk_update, self.python_cell_update_functions.keys()
+            )
+
         qs.update(**self.update_statements)
+
+    def _get_or_create_child_collector(self, path_from_starting_table):
+        next_via_field_link = path_from_starting_table[0]
+        if next_via_field_link.link_row_table != self.table:
+            raise InvalidViaPath()
+        next_link_db_column = next_via_field_link.db_column
+        if next_link_db_column not in self.sub_paths:
+            self.sub_paths[next_link_db_column] = PathBasedUpdateStatementCollector(
+                next_via_field_link.table,
+                self.field_cache,
+            )
+        return next_link_db_column
 
 
 class CachingFieldUpdateCollector(FieldCache):
@@ -132,6 +176,38 @@ class CachingFieldUpdateCollector(FieldCache):
         self._updated_fields_per_table[field.table_id][field.id] = field
         self._update_statement_collector.add_update_statement(
             field, update_statement, via_path_to_starting_table
+        )
+
+    def add_field_with_pending_update_function(
+        self,
+        field: Field,
+        update_function: Callable[[List[GeneratedTableModel]], None],
+        via_path_to_starting_table: Optional[List[LinkRowField]] = None,
+    ):
+        """
+        Stores the provided field as an updated one to send in field updated signals
+        when triggered to do so. Also stores the provided update function which will
+        be called with the list of rows that are being updated containing the provided
+        field.
+
+        :param field: The field which has been updated.
+        :param update_function: An update function that will be called with the rows
+            that need to be updated as their field cell values should be changed.
+            The function should for each row in rows `setattr(row, field.db_column,
+            your_new_value)` as the row instances will be passed to a Django bulk_update
+            call after the function has returned and so your func should directly modify
+            the row attributes to get changes saved to the db.
+        :param via_path_to_starting_table: A list of link row fields which lead from
+            the self.starting_table to the table containing field. Used to properly
+            order the update statements so the graph is updated in sequence and also
+            used if self.starting_row_id is set so only rows which join back to the
+            starting row via this path are updated.
+        """
+
+        # noinspection PyTypeChecker
+        self._updated_fields_per_table[field.table_id][field.id] = field
+        self._update_statement_collector.add_python_cell_update_function(
+            field, update_function, via_path_to_starting_table
         )
 
     def apply_updates_and_get_updated_fields(self) -> List[Field]:

@@ -287,3 +287,88 @@ def test_update_statements_at_the_same_path_node_are_grouped_into_one(
     assert send_mock.call_args[1]["field"].id == first_table_primary_field.id
     assert send_mock.call_args[1]["user"] is None
     assert send_mock.call_args[1]["related_fields"] == [first_table_other_field]
+
+
+@pytest.mark.django_db
+@patch("baserow.contrib.database.fields.signals.field_updated.send")
+def test_can_update_rows_joined_to_a_starting_row_across_a_m2m_using_python(
+    send_mock, api_client, data_fixture, django_assert_num_queries
+):
+    user = data_fixture.create_user()
+    database = data_fixture.create_database_application(user=user)
+    first_table = data_fixture.create_database_table(database=database)
+    second_table = data_fixture.create_database_table(database=database)
+    first_table_primary_field = data_fixture.create_text_field(
+        name="primary", primary=True, table=first_table
+    )
+    first_table_text_field = data_fixture.create_text_field(
+        name="text", table=first_table
+    )
+    data_fixture.create_text_field(name="primary", primary=True, table=second_table)
+    link_row_field = FieldHandler().create_field(
+        user=user,
+        table=first_table,
+        type_name="link_row",
+        link_row_table=second_table,
+        name="link",
+    )
+    first_table_model = first_table.get_model(attribute_names=True)
+    second_table_model = second_table.get_model(attribute_names=True)
+
+    second_table_a_row = second_table_model.objects.create(primary="a")
+    second_table_b_row = second_table_model.objects.create(primary="b")
+
+    first_table_1_row = first_table_model.objects.create(primary="1")
+    first_table_2_row = first_table_model.objects.create(primary="2")
+
+    first_table_1_row.link.add(second_table_a_row.id)
+    first_table_1_row.link.add(second_table_b_row.id)
+    first_table_1_row.save()
+
+    first_table_2_row.link.add(second_table_b_row.id)
+    first_table_2_row.save()
+
+    update_collector = CachingFieldUpdateCollector(
+        second_table, starting_row_id=second_table_b_row.id
+    )
+
+    def update_func1(rows):
+        for row in rows:
+            setattr(row, first_table_primary_field.db_column, f"row {row.id}")
+
+    def update_func2(rows):
+        for row in rows:
+            setattr(row, first_table_text_field.db_column, f"func2 row {row.id}")
+
+    update_collector.add_field_with_pending_update_function(
+        first_table_primary_field,
+        update_func1,
+        via_path_to_starting_table=[link_row_field],
+    )
+    update_collector.add_field_with_pending_update_function(
+        first_table_text_field,
+        update_func2,
+        via_path_to_starting_table=[link_row_field],
+    )
+    # Cache the models so we are only asserting about the update queries
+    update_collector.cache_model(first_table.get_model())
+    update_collector.cache_model(second_table.get_model())
+    # One query to get the rows for the update funcs, the second being a bulk update.
+    with django_assert_num_queries(2):
+        updated_fields = update_collector.apply_updates_and_get_updated_fields()
+
+    # No field in the starting table (second_table) was updated
+    assert updated_fields == []
+    first_table_1_row.refresh_from_db()
+    first_table_2_row.refresh_from_db()
+    assert first_table_1_row.primary == f"row {first_table_1_row.id}"
+    assert first_table_1_row.text == f"func2 row {first_table_1_row.id}"
+    assert first_table_2_row.primary == f"row {first_table_2_row.id}"
+    assert first_table_2_row.text == f"func2 row {first_table_2_row.id}"
+
+    send_mock.assert_not_called()
+    update_collector.send_additional_field_updated_signals()
+    send_mock.assert_called_once()
+    assert send_mock.call_args[1]["field"].id == first_table_primary_field.id
+    assert send_mock.call_args[1]["user"] is None
+    assert send_mock.call_args[1]["related_fields"] == [first_table_text_field]

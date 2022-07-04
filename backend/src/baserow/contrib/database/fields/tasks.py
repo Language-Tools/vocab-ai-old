@@ -60,7 +60,7 @@ def run_clt_translation(self, source_value, table_id, row_id, target_field_id):
         updated_field_ids=None,
     )
 
-    setattr(row, target_field_id, f'clt {source_value}')
+    setattr(row, target_field_id, f'trans (delayed): {source_value}')
     logger.info(f'updated row: {row}')
     row.save()
 
