@@ -10,6 +10,15 @@ from baserow.contrib.database.fields.models import Field
 # undoing a migration:
 # ./dev.sh run backend manage migrate database 0071
 
+class LanguageField(Field):
+    language = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Language",
+    )    
+
+
 class TranslationField(Field):
     source_field = models.ForeignKey(
         Field,

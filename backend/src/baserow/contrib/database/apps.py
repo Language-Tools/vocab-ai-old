@@ -163,6 +163,7 @@ class DatabaseConfig(AppConfig):
             LookupFieldType,
         )
         from .fields.vocabai_fieldtypes import (
+            LanguageFieldType,
             TranslationFieldType
         )
 
@@ -183,6 +184,7 @@ class DatabaseConfig(AppConfig):
         field_type_registry.register(PhoneNumberFieldType())
         field_type_registry.register(FormulaFieldType())
         field_type_registry.register(LookupFieldType())
+        field_type_registry.register(LanguageFieldType())
         field_type_registry.register(TranslationFieldType())
 
         from .fields.field_converters import (

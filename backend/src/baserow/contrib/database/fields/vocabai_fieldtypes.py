@@ -8,12 +8,38 @@ from baserow.contrib.database.fields.registries import FieldType
 from baserow.contrib.database.fields.models import Field
 from baserow.contrib.database.views.handler import ViewHandler
 
-from .vocabai_models import TranslationField
+from .vocabai_models import TranslationField, LanguageField
 
 from .tasks import run_clt_translation, run_clt_translation_all_rows
 
 import logging
 logger = logging.getLogger(__name__)
+
+class LanguageTextField(models.TextField):
+    pass
+
+class LanguageFieldType(FieldType):
+    type = "language_text"
+    model_class = LanguageField
+    allowed_fields = ["language"]
+    serializer_field_names = ["language"]
+
+    def get_serializer_field(self, instance, **kwargs):
+        required = kwargs.get("required", False)
+        return serializers.CharField(
+            **{
+                "required": required,
+                "allow_null": not required,
+                "allow_blank": not required,
+                "default": None,
+                **kwargs,
+            }
+        )
+
+    def get_model_field(self, instance, **kwargs):
+        return LanguageTextField(
+            default='', blank=True, null=True, **kwargs
+        )
 
 
 class TranslationTextField(models.TextField):
