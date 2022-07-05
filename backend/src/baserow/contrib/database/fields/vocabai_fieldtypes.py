@@ -124,11 +124,15 @@ class TranslationFieldType(FieldType):
             #     via_path_to_starting_table=via_path_to_starting_table,
             # )        
 
+        # logging.info(f'field.source_field.language: {field.source_field.language} type: {type(field.source_field.language)}')
+
+
         def translate_rows(rows):
+            source_field_language = field.source_field.language            
             source_internal_field_name = f'field_{field.source_field.id}'
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
-                translated_value = "translation: " + getattr(row, source_internal_field_name)
+                translated_value = f"translation ({source_field_language}): " + getattr(row, source_internal_field_name)
                 setattr(row, target_internal_field_name, translated_value)
 
         update_collector.add_field_with_pending_update_function(

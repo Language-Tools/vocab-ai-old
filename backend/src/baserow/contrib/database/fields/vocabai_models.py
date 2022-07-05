@@ -21,7 +21,7 @@ class LanguageField(Field):
 
 class TranslationField(Field):
     source_field = models.ForeignKey(
-        Field,
+        LanguageField,
         on_delete=models.CASCADE,
         help_text="The field to translate.",
         null=True,
