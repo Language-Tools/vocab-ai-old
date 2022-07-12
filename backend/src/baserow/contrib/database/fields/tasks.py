@@ -18,7 +18,7 @@ EXPORT_TIME_LIMIT = EXPORT_SOFT_TIME_LIMIT + 60
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_translation_all_rows(self, table_id, source_field_id, target_field_id):
+def run_clt_translation_all_rows(self, table_id, source_field_language, source_field_id, target_field_id):
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
     # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
@@ -27,7 +27,7 @@ def run_clt_translation_all_rows(self, table_id, source_field_id, target_field_i
         row_id = row.id
         source_value = getattr(row, source_field_id)
         # logger.info(f'row: {row}')
-        run_clt_translation.delay(source_value, table_id, row_id, target_field_id)
+        run_clt_translation.delay(source_field_language, source_value, table_id, row_id, target_field_id)
 
 # noinspection PyUnusedLocal
 @app.task(
@@ -35,7 +35,7 @@ def run_clt_translation_all_rows(self, table_id, source_field_id, target_field_i
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_translation(self, source_value, table_id, row_id, target_field_id):
+def run_clt_translation(self, source_field_language, source_value, table_id, row_id, target_field_id):
     # time.sleep(3.0)
     time.sleep(0.2)
     logger.info(f'run_cloudlanguagetoools {source_value} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
@@ -60,7 +60,7 @@ def run_clt_translation(self, source_value, table_id, row_id, target_field_id):
         updated_field_ids=None,
     )
 
-    setattr(row, target_field_id, f'trans (delayed): {source_value}')
+    setattr(row, target_field_id, f'trans (delayed)({source_field_language}): {source_value}')
     logger.info(f'updated row: {row}')
     row.save()
 
