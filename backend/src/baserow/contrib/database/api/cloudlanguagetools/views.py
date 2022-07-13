@@ -35,6 +35,8 @@ class CloudLanguageToolsLanguageDataView(APIView):
         logger.info(f'clt_core_key: [{clt_core_key}]')
 
         manager = clt_instance.get_servicemanager()
+        language_data = manager.get_language_data_json()
 
-        data = {'yo 1': 'yo 2'}
-        return Response(data)
+
+        # data = {'yo 1': 'yo 2'}
+        return Response(language_data)
