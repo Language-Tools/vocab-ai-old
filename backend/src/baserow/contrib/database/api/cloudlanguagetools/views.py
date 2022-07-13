@@ -8,6 +8,8 @@ from rest_framework.decorators import permission_classes as method_permission_cl
 import logging
 
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
+# this import is required so that celery can discover the task
+from baserow.contrib.database.cloudlanguagetools import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -32,5 +34,5 @@ class CloudLanguageToolsLanguageDataView(APIView):
     def get(self, request):
 
         # language_data = {'yo 1': 'yo 2'}
-        language_data = clt_instance.get_language_data()
+        language_data = clt_instance.get_language_list()
         return Response(language_data)

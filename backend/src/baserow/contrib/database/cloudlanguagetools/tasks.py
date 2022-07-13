@@ -37,6 +37,9 @@ def refresh_cloudlanguagetools_language_data(self):
     logger.info(f'connecting to {redis_url}')
     r = redis.Redis.from_url( redis_url )
 
-    r.set('clt:language_data', json.dumps(language_data))
+    for key, data in language_data.items():
+        redis_key = f'cloudlanguagetools:language_data:{key}'
+        r.set(redis_key, json.dumps(data))
 
     r.close()
+

@@ -10,20 +10,14 @@ logger = logging.getLogger(__name__)
 clt_instance = cloudlanguagetools.servicemanager.ServiceManager() 
 clt_instance.configure_default()
 
-# clt_language_data = None
+redis_url = settings.REDIS_URL
+logger.info(f'connecting to {redis_url}')
+redis_client = redis.Redis.from_url( redis_url )
 
 def get_servicemanager():
     return clt_instance
 
-def get_language_data():
-    # return clt_language_data
+def get_language_list():
+    redis_key = 'cloudlanguagetools:language_data:language_list'
+    return json.loads(redis_client.get(redis_key))
 
-    redis_url = settings.REDIS_URL
-    logger.info(f'connecting to {redis_url}')
-    r = redis.Redis.from_url( redis_url )
-
-    clt_language_data = r.get('clt:language_data')
-
-    r.close()
-
-    return json.loads(clt_language_data)
