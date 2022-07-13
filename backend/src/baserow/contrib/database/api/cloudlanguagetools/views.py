@@ -31,12 +31,6 @@ class CloudLanguageToolsLanguageDataView(APIView):
     @method_permission_classes([AllowAny])
     def get(self, request):
 
-        clt_core_key = os.environ.get('CLOUDLANGUAGETOOLS_CORE_KEY', '')
-        logger.info(f'clt_core_key: [{clt_core_key}]')
-
-        manager = clt_instance.get_servicemanager()
-        language_data = manager.get_language_data_json()
-
-
-        # data = {'yo 1': 'yo 2'}
+        # language_data = {'yo 1': 'yo 2'}
+        language_data = clt_instance.get_language_data()
         return Response(language_data)
