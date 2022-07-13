@@ -78,6 +78,8 @@ x-backend-required-variables: &backend-required-variables
   REDIS_PASSWORD: ${REDIS_PASSWORD:?Set to your own unqiue secure redis password used
     to access the redis instance run by Baserow.}
 
+  CLOUDLANGUAGETOOLS_CORE_KEY: ${CLOUDLANGUAGETOOLS_CORE_KEY}
+
 # These are optional but important variables which control how Baserow can be accessed.
 x-common-important-variables: &common-important-variables
   # BASEROW_PUBLIC_URL is a comma separated list of urls you will be using to access
