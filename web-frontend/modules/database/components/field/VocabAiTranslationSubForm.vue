@@ -16,6 +16,24 @@
       </Dropdown>
 
     </div>
+
+    <div class="control">
+
+      <Dropdown
+        v-model="values.language"
+        @input="languageSelected"
+      >
+        <DropdownItem
+          v-for="language in languageList"
+          :key="language.id"
+          :name="language.name"
+          :value="language.id"
+          icon="font"
+        ></DropdownItem>
+      </Dropdown>      
+
+    </div>
+
   </div>
 </template>
 
@@ -23,6 +41,8 @@
 import form from '@baserow/modules/core/mixins/form'
 
 import fieldSubForm from '@baserow/modules/database/mixins/fieldSubForm'
+
+import CloudLanguageToolsService from '@baserow/modules/database/services/cloudlanguagetools'
 
 
 export default {
@@ -34,15 +54,36 @@ export default {
       values: {
         source_field_id: '',
       },
+      languageList: [],
     }
   },
+  created() {
+      CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
+        let result = [];
+        for (const language_id in response.data) {
+          result.push({
+            id: language_id,
+            name: response.data[language_id]
+          });
+        }    
+        console.log("result: ", result);
+        this.languageList = result;
+      });
+  },  
   methods: {
     isFormValid() {
       return true
     },
     async sourceFieldSelected() {
       console.log('source_field_id: ', this.values.source_field_id);
+      const selectedField = this.$store.getters['field/get'](
+          this.values.source_field_id
+      );
+      console.log('selectedField: ', selectedField);
     },    
+    async languageSelected() {
+      console.log('language: ', this.values.language);
+    },            
   },
   computed: {
     tableFields() {
@@ -53,7 +94,14 @@ export default {
       let allFields = [primaryField];
       allFields = allFields.concat(fields);
 
-      return allFields;
+      const allLanguageFields = allFields.filter((f) => {
+              return f.type == "language_text"
+            });
+
+
+      console.log('allLanguageFields: ', allLanguageFields);
+
+      return allLanguageFields;
     },
   }  
 }
