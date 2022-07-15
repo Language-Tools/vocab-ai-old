@@ -20,7 +20,7 @@
     <div class="control">
 
       <Dropdown
-        v-model="values.language"
+        v-model="values.target_language"
         @input="languageSelected"
       >
         <DropdownItem
@@ -53,11 +53,15 @@ export default {
       allowedValues: ['source_field_id'],
       values: {
         source_field_id: '',
+        target_language: '',
       },
+      selectedSourceFieldLanguage: '',
       languageList: [],
+      translationOptions: [],
     }
   },
   created() {
+      // fetch language list
       CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
         let result = [];
         for (const language_id in response.data) {
@@ -69,6 +73,11 @@ export default {
         console.log("result: ", result);
         this.languageList = result;
       });
+      // fetch translation options
+      CloudLanguageToolsService(this.$client).fetchAllTranslationOptions().then((response) => {
+        this.translationOptions = response.data;
+        console.log('translationOptions: ', this.translationOptions);
+      });      
   },  
   methods: {
     isFormValid() {
@@ -79,10 +88,12 @@ export default {
       const selectedField = this.$store.getters['field/get'](
           this.values.source_field_id
       );
-      console.log('selectedField: ', selectedField);
+      // console.log('selectedField: ', selectedField);
+      this.selectedSourceFieldLanguage = selectedField.language;
+      console.log('selectedSourceFieldLanguage: ', this.selectedSourceFieldLanguage);
     },    
     async languageSelected() {
-      console.log('language: ', this.values.language);
+      console.log('target language: ', this.values.target_language);
     },            
   },
   computed: {

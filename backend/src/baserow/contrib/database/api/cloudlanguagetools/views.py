@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from baserow.contrib.database.api.tokens.authentications import TokenAuthentication
+from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 from rest_framework.decorators import permission_classes as method_permission_classes
 import logging
 
@@ -80,3 +81,39 @@ class CloudLanguageToolsTransliterationOptions(APIView):
     def get(self, request):
         language_data = clt_instance.get_transliteration_options()
         return Response(language_data)
+
+class CloudLanguageToolsTranslationServices(APIView):
+    authentication_classes = APIView.authentication_classes + [TokenAuthentication]
+    permission_classes = (IsAuthenticated,)
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+
+        return super().get_permissions()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="source_language",
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                description="source language",
+            ),
+            OpenApiParameter(
+                name="target_language",
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                description="target language",
+            )            
+        ],        
+        tags=["cloudlanguagetools language data"],
+        operation_id="translation_service",
+        description=(
+            "Obtain available translation services for source/target language combination"
+        ),
+    )
+    @method_permission_classes([AllowAny])
+    def get(self, request, source_language, target_language):
+        service_list = clt_instance.get_translation_services_source_target_language(source_language, target_language)
+        return Response(service_list)
