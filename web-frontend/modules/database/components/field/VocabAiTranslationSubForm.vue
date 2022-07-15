@@ -18,7 +18,6 @@
     </div>
 
     <div class="control">
-
       <Dropdown
         v-model="values.target_language"
         @input="languageSelected"
@@ -31,8 +30,22 @@
           icon="font"
         ></DropdownItem>
       </Dropdown>      
-
     </div>
+
+    <div class="control">
+      <Dropdown
+        v-model="values.translation_service"
+        @input="translationServiceSelected"
+      >
+        <DropdownItem
+          v-for="service in translationServices"
+          :key="service"
+          :name="service"
+          :value="service"
+          icon="font"
+        ></DropdownItem>
+      </Dropdown>      
+    </div>    
 
   </div>
 </template>
@@ -54,10 +67,11 @@ export default {
       values: {
         source_field_id: '',
         target_language: '',
+        translation_service: '',
       },
       selectedSourceFieldLanguage: '',
       languageList: [],
-      translationOptions: [],
+      translationServices: [],
     }
   },
   created() {
@@ -73,11 +87,6 @@ export default {
         console.log("result: ", result);
         this.languageList = result;
       });
-      // fetch translation options
-      CloudLanguageToolsService(this.$client).fetchAllTranslationOptions().then((response) => {
-        this.translationOptions = response.data;
-        console.log('translationOptions: ', this.translationOptions);
-      });      
   },  
   methods: {
     isFormValid() {
@@ -91,10 +100,25 @@ export default {
       // console.log('selectedField: ', selectedField);
       this.selectedSourceFieldLanguage = selectedField.language;
       console.log('selectedSourceFieldLanguage: ', this.selectedSourceFieldLanguage);
+      this.refreshServiceList();
     },    
     async languageSelected() {
       console.log('target language: ', this.values.target_language);
+      this.refreshServiceList();
+    },        
+    async translationServiceSelected() {
+      console.log('translation_service: ', this.values.translation_service);
     },            
+    async refreshServiceList() {
+      const source_language = this.selectedSourceFieldLanguage;
+      const target_language = this.values.target_language;
+      if(source_language != '' && target_language != '')  {
+        CloudLanguageToolsService(this.$client).fetchTranslationServices(source_language, target_language).then((response) => {
+          this.translationServices = response.data;
+          console.log('translationServices: ', this.translationServices);
+        });            
+      }
+    }    
   },
   computed: {
     tableFields() {
