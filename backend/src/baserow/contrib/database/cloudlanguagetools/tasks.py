@@ -18,7 +18,8 @@ def setup_periodic_tasks(sender, **kwargs):
     logger.info('setup_periodic_tasks')
     
     # run every 30s
-    sender.add_periodic_task(30.0, refresh_cloudlanguagetools_language_data.s(), name='cloudlanguagetools language data')
+    period = 3600 * 3
+    sender.add_periodic_task(period, refresh_cloudlanguagetools_language_data.s(), name='cloudlanguagetools language data')
 
 
 # noinspection PyUnusedLocal
