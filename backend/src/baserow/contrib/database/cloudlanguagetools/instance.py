@@ -47,4 +47,3 @@ def get_translation(text, source_language, target_language, service):
     target_language_key = target_language_options[0]['language_id']
     translated_text = clt_instance.get_translation(text, service, source_language_key, target_language_key)
     return translated_text
-    # return f'translation: {text} ({source_language} to {target_language}, {service}'
