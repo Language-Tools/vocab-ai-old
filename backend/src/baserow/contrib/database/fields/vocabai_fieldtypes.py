@@ -11,6 +11,7 @@ from baserow.contrib.database.views.handler import ViewHandler
 from .vocabai_models import TranslationField, LanguageField
 
 from .tasks import run_clt_translation, run_clt_translation_all_rows
+from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
 import logging
 logger = logging.getLogger(__name__)
@@ -142,14 +143,15 @@ class TranslationFieldType(FieldType):
 
 
         def translate_rows(rows):
-            source_field_language = field.source_field.language  
+            source_language = field.source_field.language  
             target_language = field.target_language
             translation_service = field.service          
             source_internal_field_name = f'field_{field.source_field.id}'
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
-                translated_value = f"translation ({source_field_language} to {target_language}, {translation_service}): " + getattr(row, source_internal_field_name)
-                setattr(row, target_internal_field_name, translated_value)
+                text = getattr(row, source_internal_field_name)
+                translated_text = clt_instance.get_translation(text, source_language, target_language, translation_service)
+                setattr(row, target_internal_field_name, translated_text)
 
         update_collector.add_field_with_pending_update_function(
             field,
