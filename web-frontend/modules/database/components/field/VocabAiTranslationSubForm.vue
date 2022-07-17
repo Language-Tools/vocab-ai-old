@@ -34,7 +34,7 @@
 
     <div class="control">
       <Dropdown
-        v-model="values.translation_service"
+        v-model="values.service"
         @input="translationServiceSelected"
       >
         <DropdownItem
@@ -67,7 +67,7 @@ export default {
       values: {
         source_field_id: '',
         target_language: '',
-        translation_service: '',
+        service: '',
       },
       selectedSourceFieldLanguage: '',
       languageList: [],

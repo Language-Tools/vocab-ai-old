@@ -49,10 +49,14 @@ class TranslationFieldType(FieldType):
     type = "translation"
     model_class = TranslationField
     allowed_fields = [
-        'source_field_id'
+        'source_field_id',
+        'target_language',
+        'service'
     ]
     serializer_field_names = [
-        'source_field_id'
+        'source_field_id',
+        'target_language',
+        'service'
     ]
     serializer_field_overrides = {
         "source_field_id": serializers.IntegerField(
@@ -61,6 +65,16 @@ class TranslationFieldType(FieldType):
             source="source_field.id",
             help_text="The id of the field to translate",
         ),
+        "target_language": serializers.CharField(
+            required=True,
+            allow_null=False,
+            allow_blank=False
+        ),
+        'service': serializers.CharField(
+            required=True,
+            allow_null=False,
+            allow_blank=False
+        )
     }
 
     can_be_primary_field = False
@@ -128,11 +142,13 @@ class TranslationFieldType(FieldType):
 
 
         def translate_rows(rows):
-            source_field_language = field.source_field.language            
+            source_field_language = field.source_field.language  
+            target_language = field.target_language
+            translation_service = field.service          
             source_internal_field_name = f'field_{field.source_field.id}'
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
-                translated_value = f"translation ({source_field_language}): " + getattr(row, source_internal_field_name)
+                translated_value = f"translation ({source_field_language} to {target_language}, {translation_service}): " + getattr(row, source_internal_field_name)
                 setattr(row, target_internal_field_name, translated_value)
 
         update_collector.add_field_with_pending_update_function(

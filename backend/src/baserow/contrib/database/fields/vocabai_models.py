@@ -28,3 +28,15 @@ class TranslationField(Field):
         blank=True,
         related_name='+'
     )    
+    target_language = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Target Language",
+    )        
+    service = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Translation Service",
+    )            
