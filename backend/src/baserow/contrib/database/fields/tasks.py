@@ -3,6 +3,8 @@ from baserow.config.celery import app
 from baserow.contrib.database.table.models import Table
 from baserow.contrib.database.rows.signals import row_updated, before_row_update
 
+from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
+
 import time
 
 import logging
@@ -18,16 +20,16 @@ EXPORT_TIME_LIMIT = EXPORT_SOFT_TIME_LIMIT + 60
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_translation_all_rows(self, table_id, source_field_language, source_field_id, target_field_id):
+def run_clt_translation_all_rows(self, table_id, source_language, target_language, service, source_field_id, target_field_id):
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
     # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
     table_model = table.get_model()
     for row in table_model.objects.all():
         row_id = row.id
-        source_value = getattr(row, source_field_id)
+        text = getattr(row, source_field_id)
         # logger.info(f'row: {row}')
-        run_clt_translation.delay(source_field_language, source_value, table_id, row_id, target_field_id)
+        run_clt_translation.delay(text, source_language, target_language, service, table_id, row_id, target_field_id)
 
 # noinspection PyUnusedLocal
 @app.task(
@@ -35,10 +37,10 @@ def run_clt_translation_all_rows(self, table_id, source_field_language, source_f
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_translation(self, source_field_language, source_value, table_id, row_id, target_field_id):
+def run_clt_translation(self, text, source_language, target_language, service, table_id, row_id, target_field_id):
     # time.sleep(3.0)
-    time.sleep(0.2)
-    logger.info(f'run_cloudlanguagetoools {source_value} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
+    # time.sleep(0.2)
+    logger.info(f'run_cloudlanguagetoools {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
 
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
@@ -60,7 +62,9 @@ def run_clt_translation(self, source_field_language, source_value, table_id, row
         updated_field_ids=None,
     )
 
-    setattr(row, target_field_id, f'trans (delayed)({source_field_language}): {source_value}')
+    translated_text = clt_instance.get_translation(text, source_language, target_language, service)
+
+    setattr(row, target_field_id, translated_text)
     logger.info(f'updated row: {row}')
     row.save()
 
