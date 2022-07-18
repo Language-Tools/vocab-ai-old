@@ -69,14 +69,13 @@ export default {
         service: '',
       },
       selectedSourceFieldLanguage: '',
-      // translationServices: [],
     }
   },
   created() {
       // log current values
-      console.log("current values: ", this.values);
+      // console.log("current values: ", this.values);
       // fetch language list
-      this.$store.dispatch('cloudlanguagetools/fetchAllLanguages');
+      // this.$store.dispatch('cloudlanguagetools/fetchAllLanguages');
   },  
   methods: {
     isFormValid() {
@@ -90,25 +89,13 @@ export default {
       // console.log('selectedField: ', selectedField);
       this.selectedSourceFieldLanguage = selectedField.language;
       console.log('selectedSourceFieldLanguage: ', this.selectedSourceFieldLanguage);
-      this.refreshServiceList();
     },    
     async languageSelected() {
       console.log('target language: ', this.values.target_language);
-      this.refreshServiceList();
     },        
     async translationServiceSelected() {
       console.log('translation_service: ', this.values.translation_service);
     },            
-    async refreshServiceList() {
-      const source_language = this.selectedSourceFieldLanguage;
-      const target_language = this.values.target_language;
-      if(source_language != '' && target_language != '')  {
-        CloudLanguageToolsService(this.$client).fetchTranslationServices(source_language, target_language).then((response) => {
-          this.translationServices = response.data;
-          console.log('translationServices: ', this.translationServices);
-        });            
-      }
-    }    
   },
   computed: {
     tableFields() {
@@ -137,7 +124,15 @@ export default {
     },
     serviceList() {
       console.log("computed: serviceList");
-      return this.$store.getters['cloudlanguagetools/allTranslationServices'];
+      if( this.selectedSourceFieldLanguage != '' && this.values.target_language != '') {
+        const serviceList = this.$store.getters['cloudlanguagetools/translationServicesForLanguages'](this.selectedSourceFieldLanguage, this.values.target_language);
+        console.log("filtered service list: ", serviceList);
+        return serviceList;
+      } else {
+        const serviceList = this.$store.getters['cloudlanguagetools/allTranslationServices'];
+        console.log("serviceList, all services: ", serviceList);
+        return serviceList;
+      }
     }
   }  
 }

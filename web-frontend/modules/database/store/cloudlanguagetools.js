@@ -70,7 +70,43 @@ export const getters = {
     },
     allTranslationServices(state) {
         return state.allTranslationServices;
+    },
+    translationServicesForLanguages: (state) => (sourceLanguage, targetLanguage) => {
+        const sourceLanguageServices = Object.keys(state.allTranslationOptions.filter((entry) => entry['language_code'] == sourceLanguage).
+            reduce((result, entry) => {
+                result[entry['service']] = true;
+                return result;
+            }, {}));
+        const targetLanguageServices = Object.keys(state.allTranslationOptions.filter((entry) => entry['language_code'] == targetLanguage).
+            reduce((result, entry) => {
+                result[entry['service']] = true;
+                return result;
+            }, {}));            
+        
+        const commonServices = sourceLanguageServices.filter(value => targetLanguageServices.includes(value));
+        return commonServices;
+      },    
+    /*
+    translationServicesForLanguages(state) {
+        return (sourceLanguage, targetLanguage) => {
+            const sourceLanguageServiceList = Object.keys(state.allTranslationOptions.reduce((result, entry) => {
+                if( entry["language_code"] == sourceLanguage) {
+                    result[entry["service"]] = true;
+                }
+                return result;
+            }, {}));
+            const targetLanguageServiceList = Object.keys(state.allTranslationOptions.reduce((result, entry) => {
+                if( entry["language_code"] == targetLanguage) {
+                    result[entry["service"]] = true;
+                }
+                return result;
+            }, {}));
+
+            const commonServices = sourceLanguageServiceList.filter(value => targetLanguageServiceList.includes(value));
+            return commonServices;
+        }
     }
+    */
 }
 
 export default {
