@@ -1,5 +1,4 @@
 import CloudLanguageToolsService from '@baserow/modules/database/services/cloudlanguagetools'
-// import { clone } from '@baserow/modules/core/utils/object'
 
 export const state = () => ({
   allLanguages: [],

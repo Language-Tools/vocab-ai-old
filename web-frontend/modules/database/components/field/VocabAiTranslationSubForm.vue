@@ -14,7 +14,6 @@
           :icon="field.icon"
         ></DropdownItem>
       </Dropdown>
-
     </div>
 
     <div class="control">
@@ -70,7 +69,6 @@ export default {
         service: '',
       },
       selectedSourceFieldLanguage: '',
-      // languageList: [],
       translationServices: [],
     }
   },
@@ -79,19 +77,6 @@ export default {
       console.log("current values: ", this.values);
       // fetch language list
       this.$store.dispatch('cloudlanguagetools/fetchAllLanguages');
-      /*
-      CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
-        let result = [];
-        for (const language_id in response.data) {
-          result.push({
-            id: language_id,
-            name: response.data[language_id]
-          });
-        }    
-        console.log("result: ", result);
-        this.languageList = result;
-      });
-      */
   },  
   methods: {
     isFormValid() {

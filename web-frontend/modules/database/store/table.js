@@ -176,6 +176,8 @@ export const actions = {
     await axios.all([
       dispatch('view/fetchAll', table, { root: true }),
       dispatch('field/fetchAll', table, { root: true }),
+      // retrieve cloudlanguagetools data
+      dispatch('cloudlanguagetools/fetchAllLanguages', '', { root: true }),
     ])
     await dispatch('application/clearChildrenSelected', null, { root: true })
     await dispatch('forceSelect', { database, table })

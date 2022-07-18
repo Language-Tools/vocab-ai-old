@@ -203,10 +203,10 @@ export default (context) => {
     i18n.mergeLocaleMessage('it', it)
   }
 
+  store.registerModule('cloudlanguagetools', cloudlanguagetoolsStore)
   store.registerModule('table', tableStore)
   store.registerModule('view', viewStore)
   store.registerModule('field', fieldStore)
-  store.registerModule('cloudlanguagetools', cloudlanguagetoolsStore)
   store.registerModule('rowModal', rowModal)
   store.registerModule('page/view/grid', gridStore)
   store.registerModule('page/view/gallery', galleryStore)
