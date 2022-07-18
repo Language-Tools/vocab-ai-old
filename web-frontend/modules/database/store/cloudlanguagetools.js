@@ -17,15 +17,20 @@ export const actions = {
    */
   async fetchAllLanguages({ commit, getters, dispatch }, table) {
     console.log('store/cloudlanguagetools fetchAllLanguages');
-    const { data } = await CloudLanguageToolsService(this.$client).fetchAllLanguages()
-    let languagesArray = [];
-    for (const language_id in data) {
-        languagesArray.push({
-        id: language_id,
-        name: data[language_id]
+    return new Promise((resolve, reject) => {
+        // const { data } = await CloudLanguageToolsService(this.$client).fetchAllLanguages()
+        CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
+            let languagesArray = [];
+            for (const language_id in response.data) {
+                languagesArray.push({
+                id: language_id,
+                name: response.data[language_id]
+                });
+            }
+            commit('SET_ALL_LANGUAGES', languagesArray);
+            resolve();
         });
-    }
-    commit('SET_ALL_LANGUAGES', languagesArray);
+    });
   }
 }
 
