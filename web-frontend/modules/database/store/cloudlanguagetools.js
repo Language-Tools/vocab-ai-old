@@ -3,6 +3,7 @@ import CloudLanguageToolsService from '@baserow/modules/database/services/cloudl
 export const state = () => ({
   allLanguages: [],
   allTranslationOptions: [],
+  allTransliterationOptions: [],
   allTranslationServices: [],
 })
 
@@ -13,6 +14,9 @@ export const mutations = {
   SET_ALL_TRANSLATION_OPTIONS(state, allTranslationOptions) {
     state.allTranslationOptions = allTranslationOptions;
   },
+  SET_ALL_TRANSLITERATION_OPTIONS(state, allTransliterationOptions) {
+    state.allTransliterationOptions = allTransliterationOptions;
+  },  
   SET_ALL_TRANSLATION_SERVICES(state, allTranslationServices) {
     state.allTranslationServices = allTranslationServices;
   },  
@@ -24,6 +28,7 @@ export const actions = {
     console.log('store/cloudlanguagetools fetchAll');
     await dispatch('fetchAllLanguages');
     await dispatch('fetchAllTranslationOptions');
+    await dispatch('fetchAllTransliterationOptions');
   },
 
   async fetchAllLanguages({ commit, getters, dispatch }, table) {
@@ -56,6 +61,18 @@ export const actions = {
                 return result;
             }, {}));
             commit('SET_ALL_TRANSLATION_SERVICES', services);
+            resolve();
+        });
+    });
+  },  
+
+
+  async fetchAllTransliterationOptions({ commit, getters, dispatch }, table) {
+    console.log('store/cloudlanguagetools fetchAllTransliterationOptions');
+    return new Promise((resolve, reject) => {
+        CloudLanguageToolsService(this.$client).fetchAllTransliterationOptions().then((response) => {
+            commit('SET_ALL_TRANSLITERATION_OPTIONS', response.data);
+            // console.log("retrieved all transliteratino options: ", response.data);
             resolve();
         });
     });
