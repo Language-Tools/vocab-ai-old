@@ -63,19 +63,23 @@ export default {
   mixins: [form, fieldSubForm],
   data() {
     return {
-      allowedValues: ['source_field_id'],
+      allowedValues: ['source_field_id', 'target_language', 'service'],
       values: {
         source_field_id: '',
         target_language: '',
         service: '',
       },
       selectedSourceFieldLanguage: '',
-      languageList: [],
+      // languageList: [],
       translationServices: [],
     }
   },
   created() {
+      // log current values
+      console.log("current values: ", this.values);
       // fetch language list
+      this.$store.dispatch('cloudlanguagetools/fetchAllLanguages');
+      /*
       CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
         let result = [];
         for (const language_id in response.data) {
@@ -87,6 +91,7 @@ export default {
         console.log("result: ", result);
         this.languageList = result;
       });
+      */
   },  
   methods: {
     isFormValid() {
@@ -122,6 +127,7 @@ export default {
   },
   computed: {
     tableFields() {
+      console.log("computed: tableFields");
       // collect all fields, including primary field in this table
       const primaryField = this.$store.getters['field/getPrimary'];
       const fields = this.$store.getters['field/getAll']
@@ -138,6 +144,12 @@ export default {
 
       return allLanguageFields;
     },
+    languageList() {
+      console.log("computed: languageList");
+      const allLanguages = this.$store.getters['cloudlanguagetools/allLanguages'];
+      console.log("allLanguages: ", allLanguages);
+      return allLanguages;
+    }
   }  
 }
 </script>
