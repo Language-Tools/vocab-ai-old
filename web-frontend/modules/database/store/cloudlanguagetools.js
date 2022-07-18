@@ -84,29 +84,8 @@ export const getters = {
             }, {}));            
         
         const commonServices = sourceLanguageServices.filter(value => targetLanguageServices.includes(value));
-        return commonServices;
+        return commonServices.sort((a, b) => a.localeCompare(b));
       },    
-    /*
-    translationServicesForLanguages(state) {
-        return (sourceLanguage, targetLanguage) => {
-            const sourceLanguageServiceList = Object.keys(state.allTranslationOptions.reduce((result, entry) => {
-                if( entry["language_code"] == sourceLanguage) {
-                    result[entry["service"]] = true;
-                }
-                return result;
-            }, {}));
-            const targetLanguageServiceList = Object.keys(state.allTranslationOptions.reduce((result, entry) => {
-                if( entry["language_code"] == targetLanguage) {
-                    result[entry["service"]] = true;
-                }
-                return result;
-            }, {}));
-
-            const commonServices = sourceLanguageServiceList.filter(value => targetLanguageServiceList.includes(value));
-            return commonServices;
-        }
-    }
-    */
 }
 
 export default {

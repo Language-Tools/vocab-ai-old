@@ -71,12 +71,6 @@ export default {
       selectedSourceFieldLanguage: '',
     }
   },
-  created() {
-      // log current values
-      // console.log("current values: ", this.values);
-      // fetch language list
-      // this.$store.dispatch('cloudlanguagetools/fetchAllLanguages');
-  },  
   methods: {
     isFormValid() {
       return true
