@@ -37,7 +37,7 @@
         @input="translationServiceSelected"
       >
         <DropdownItem
-          v-for="service in translationServices"
+          v-for="service in serviceList"
           :key="service"
           :name="service"
           :value="service"
@@ -69,7 +69,7 @@ export default {
         service: '',
       },
       selectedSourceFieldLanguage: '',
-      translationServices: [],
+      // translationServices: [],
     }
   },
   created() {
@@ -134,6 +134,10 @@ export default {
       const allLanguages = this.$store.getters['cloudlanguagetools/allLanguages'];
       console.log("allLanguages: ", allLanguages);
       return allLanguages;
+    },
+    serviceList() {
+      console.log("computed: serviceList");
+      return this.$store.getters['cloudlanguagetools/allTranslationServices'];
     }
   }  
 }

@@ -177,7 +177,7 @@ export const actions = {
       dispatch('view/fetchAll', table, { root: true }),
       dispatch('field/fetchAll', table, { root: true }),
       // retrieve cloudlanguagetools data
-      dispatch('cloudlanguagetools/fetchAllLanguages', '', { root: true }),
+      dispatch('cloudlanguagetools/fetchAll', '', { root: true }),
     ])
     await dispatch('application/clearChildrenSelected', null, { root: true })
     await dispatch('forceSelect', { database, table })
