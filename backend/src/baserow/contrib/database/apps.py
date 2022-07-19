@@ -164,7 +164,8 @@ class DatabaseConfig(AppConfig):
         )
         from .fields.vocabai_fieldtypes import (
             LanguageFieldType,
-            TranslationFieldType
+            TranslationFieldType,
+            TransliterationFieldType
         )
 
         field_type_registry.register(TextFieldType())
@@ -186,6 +187,7 @@ class DatabaseConfig(AppConfig):
         field_type_registry.register(LookupFieldType())
         field_type_registry.register(LanguageFieldType())
         field_type_registry.register(TranslationFieldType())
+        field_type_registry.register(TransliterationFieldType())
 
         from .fields.field_converters import (
             LinkRowFieldConverter,

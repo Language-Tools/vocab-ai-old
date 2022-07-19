@@ -8,7 +8,7 @@ from baserow.contrib.database.fields.registries import FieldType
 from baserow.contrib.database.fields.models import Field
 from baserow.contrib.database.views.handler import ViewHandler
 
-from .vocabai_models import TranslationField, LanguageField
+from .vocabai_models import TranslationField, TransliterationField, LanguageField
 
 from .tasks import run_clt_translation, run_clt_translation_all_rows
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
@@ -180,6 +180,139 @@ class TranslationFieldType(FieldType):
         table_id = field.table.id
 
         logger.info(f'after_update table_id: {table_id} source_field_id: {source_field_id} target_field_id: {target_field_id}')
+
+        run_clt_translation_all_rows.delay(table_id, 
+                                           source_field_language, 
+                                           target_language,
+                                           translation_service,
+                                           source_field_id, 
+                                           target_field_id)
+
+    def after_create(self, field, model, user, connection, before):
+        self.update_all_rows(field)
+
+    def after_update(
+        self,
+        from_field,
+        to_field,
+        from_model,
+        to_model,
+        user,
+        connection,
+        altered_column,
+        before,
+    ):
+        self.update_all_rows(to_field)
+
+
+class TransliterationFieldType(FieldType):
+    type = "transliteration"
+    model_class = TransliterationField
+    allowed_fields = [
+        'source_field_id',
+        'transliteration_key',
+        'service'
+    ]
+    serializer_field_names = [
+        'source_field_id',
+        'transliteration_key',
+        'service'
+    ]
+    serializer_field_overrides = {
+        "source_field_id": serializers.IntegerField(
+            required=False,
+            allow_null=True,
+            source="source_field.id",
+            help_text="The id of the field to translate",
+        ),
+        "transliteration_key": serializers.CharField(
+            required=True,
+            allow_null=False,
+            allow_blank=False
+        ),
+        'service': serializers.CharField(
+            required=True,
+            allow_null=False,
+            allow_blank=False
+        )
+    }
+
+    can_be_primary_field = False
+
+    def prepare_value_for_db(self, instance, value):
+        return value
+
+    def get_serializer_field(self, instance, **kwargs):
+        return serializers.CharField(
+            **{
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+                **kwargs,
+            }        
+        )
+
+    def get_model_field(self, instance, **kwargs):
+        return TranslationTextField(
+            default=None,
+            blank=True, 
+            null=True, 
+            **kwargs
+        )
+
+    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
+        # logger.info(f'get_field_dependencies')
+        result = []
+        if field_instance.source_field != None:
+            result = [field_instance.source_field.name]
+        logger.info(f'get_field_dependencies: result {result}')
+        return result
+
+    def row_of_dependency_updated(
+        self,
+        field,
+        starting_row,
+        update_collector,
+        via_path_to_starting_table,
+    ):
+
+        def transliterate_rows(rows):
+            transliteration_key = field.transliteration_key
+            transliteration_service = field.service          
+            source_internal_field_name = f'field_{field.source_field.id}'
+            target_internal_field_name = f'field_{field.id}'
+            for row in rows:
+                text = getattr(row, source_internal_field_name)
+                transliterated_text = clt_instance.get_transliteration(text, transliteration_service, transliteration_key)
+                setattr(row, target_internal_field_name, transliterated_text)
+
+        update_collector.add_field_with_pending_update_function(
+            field,
+            update_function=transliterate_rows,
+            via_path_to_starting_table=via_path_to_starting_table,
+        )       
+
+        ViewHandler().field_value_updated(field)     
+
+        super().row_of_dependency_updated(
+            field,
+            starting_row,
+            update_collector,
+            via_path_to_starting_table,
+        )        
+
+
+    def update_all_rows(self, field):
+        return # skip for now
+
+        logger.info(f'update_all_rows')
+        source_field_language = field.source_field.language
+        target_language = field.target_language
+        translation_service = field.service          
+        source_field_id = f'field_{field.source_field.id}'
+        target_field_id = f'field_{field.id}'
+
+        table_id = field.table.id
 
         run_clt_translation_all_rows.delay(table_id, 
                                            source_field_language, 

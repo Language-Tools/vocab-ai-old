@@ -38,8 +38,6 @@ def run_clt_translation_all_rows(self, table_id, source_language, target_languag
     time_limit=EXPORT_TIME_LIMIT,
 )
 def run_clt_translation(self, text, source_language, target_language, service, table_id, row_id, target_field_id):
-    # time.sleep(3.0)
-    # time.sleep(0.2)
     logger.info(f'run_cloudlanguagetoools {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
 
     base_queryset = Table.objects

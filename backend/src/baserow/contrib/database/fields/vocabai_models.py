@@ -40,3 +40,25 @@ class TranslationField(Field):
         default="",
         help_text="Translation Service",
     )            
+
+class TransliterationField(Field):
+    source_field = models.ForeignKey(
+        LanguageField,
+        on_delete=models.CASCADE,
+        help_text="The field to transliterate.",
+        null=True,
+        blank=True,
+        related_name='+'
+    )    
+    transliteration_key = models.CharField(
+        max_length=2048,
+        blank=True,
+        default="",
+        help_text="Transliteration key for this service",
+    )        
+    service = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Transliteration Service",
+    )                
