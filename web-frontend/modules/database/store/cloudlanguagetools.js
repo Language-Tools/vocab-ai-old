@@ -104,6 +104,10 @@ export const getters = {
         const commonServices = sourceLanguageServices.filter(value => targetLanguageServices.includes(value));
         return commonServices.sort((a, b) => a.localeCompare(b));
       },    
+
+      transliterationOptionsForLanguage: (state) => (language) => {
+        return state.allTransliterationOptions.filter((entry) => entry['language_code'] == language);
+      },
 }
 
 export default {

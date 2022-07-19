@@ -3,6 +3,7 @@ import { FieldType } from '@baserow/modules/database/fieldTypes'
 import GridViewFieldText from '@baserow/modules/database/components/view/grid/fields/GridViewFieldText'
 import RowEditFieldText from '@baserow/modules/database/components/row/RowEditFieldText'
 import VocabAiTranslationSubForm from '@baserow/modules/database/components/field/VocabAiTranslationSubForm'
+import VocabAiTransliterationSubForm from '@baserow/modules/database/components/field/VocabAiTransliterationSubForm'
 import VocabAiLanguageTextSubForm from '@baserow/modules/database/components/field/VocabAiLanguageTextSubForm'
 import FunctionalGridViewFieldText from '@baserow/modules/database/components/view/grid/fields/FunctionalGridViewFieldText'
 
@@ -64,6 +65,49 @@ export class TranslationFieldType extends FieldType {
 
   getFormComponent() {
     return VocabAiTranslationSubForm
+  }
+
+  getGridViewFieldComponent() {
+    return GridViewFieldText
+  }
+
+  getRowEditFieldComponent() {
+    return RowEditFieldText
+  }
+
+  getFunctionalGridViewFieldComponent() {
+    return FunctionalGridViewFieldText
+  }
+
+  getDocsDataType(field) {
+    return 'string'
+  }
+
+  getDocsDescription(field) {
+    return this.app.i18n.t('fieldDocs.text')
+  }
+
+  getDocsRequestExample(field) {
+    return 'string'
+  }  
+
+}
+
+export class TransliterationFieldType extends FieldType {
+  static getType() {
+    return 'transliteration'
+  }
+
+  getIconClass() {
+    return 'list-ol'
+  }
+
+  getName() {
+    return 'Transliteration'
+  }
+
+  getFormComponent() {
+    return VocabAiTransliterationSubForm
   }
 
   getGridViewFieldComponent() {
