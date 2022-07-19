@@ -47,3 +47,13 @@ def get_translation(text, source_language, target_language, service):
     target_language_key = target_language_options[0]['language_id']
     translated_text = clt_instance.get_translation(text, service, source_language_key, target_language_key)
     return translated_text
+
+
+def get_transliteration(text, transliteration_id):
+    transliteration_options = get_transliteration_options()
+    transliteration_option = [x for x in transliteration_options if x['transliteration_id'] == transliteration_id]
+    service = transliteration_option[0]['service']
+    transliteration_key = transliteration_option[0]['transliteration_key']
+
+    translated_text = clt_instance.get_transliteration(text, service, transliteration_key)
+    return translated_text    

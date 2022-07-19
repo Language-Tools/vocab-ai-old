@@ -18,14 +18,14 @@
 
     <div class="control">
       <Dropdown
-        v-model="values.service"
+        v-model="values.transliteration_id"
         @input="translationServiceSelected"
       >
         <DropdownItem
           v-for="option in transliterationOptions"
-          :key="option.transliteration_name"
-          :name="option.transliteration_name"
-          :value="option.transliteration_name"
+          :key="option.transliteration_id"
+          :name="option.transliteration_shortname"
+          :value="option.transliteration_id"
           icon="font"
         ></DropdownItem>
       </Dropdown>      
@@ -44,11 +44,10 @@ export default {
   mixins: [form, fieldSubForm],
   data() {
     return {
-      allowedValues: ['source_field_id', 'transliteration_key', 'service'],
+      allowedValues: ['source_field_id', 'transliteration_id'],
       values: {
         source_field_id: '',
-        transliteration_key: '',
-        service: '',
+        transliteration_id: '',
       },
       selectedSourceFieldLanguage: '',
     }
@@ -66,11 +65,8 @@ export default {
       this.selectedSourceFieldLanguage = selectedField.language;
       console.log('selectedSourceFieldLanguage: ', this.selectedSourceFieldLanguage);
     },    
-    async languageSelected() {
-      console.log('target language: ', this.values.target_language);
-    },        
     async translationServiceSelected() {
-      console.log('translation_service: ', this.values.translation_service);
+      console.log('translation_service: ', this.values.transliteration_id);
     },            
   },
   computed: {

@@ -210,13 +210,11 @@ class TransliterationFieldType(FieldType):
     model_class = TransliterationField
     allowed_fields = [
         'source_field_id',
-        'transliteration_key',
-        'service'
+        'transliteration_id'
     ]
     serializer_field_names = [
         'source_field_id',
-        'transliteration_key',
-        'service'
+        'transliteration_id'
     ]
     serializer_field_overrides = {
         "source_field_id": serializers.IntegerField(
@@ -225,16 +223,11 @@ class TransliterationFieldType(FieldType):
             source="source_field.id",
             help_text="The id of the field to translate",
         ),
-        "transliteration_key": serializers.CharField(
+        "transliteration_id": serializers.CharField(
             required=True,
             allow_null=False,
             allow_blank=False
         ),
-        'service': serializers.CharField(
-            required=True,
-            allow_null=False,
-            allow_blank=False
-        )
     }
 
     can_be_primary_field = False
@@ -277,13 +270,12 @@ class TransliterationFieldType(FieldType):
     ):
 
         def transliterate_rows(rows):
-            transliteration_key = field.transliteration_key
-            transliteration_service = field.service          
+            transliteration_id = field.transliteration_id
             source_internal_field_name = f'field_{field.source_field.id}'
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
                 text = getattr(row, source_internal_field_name)
-                transliterated_text = clt_instance.get_transliteration(text, transliteration_service, transliteration_key)
+                transliterated_text = clt_instance.get_transliteration(text, transliteration_id)
                 setattr(row, target_internal_field_name, transliterated_text)
 
         update_collector.add_field_with_pending_update_function(

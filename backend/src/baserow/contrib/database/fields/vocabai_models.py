@@ -50,15 +50,9 @@ class TransliterationField(Field):
         blank=True,
         related_name='+'
     )    
-    transliteration_key = models.CharField(
+    transliteration_id = models.CharField(
         max_length=2048,
         blank=True,
         default="",
         help_text="Transliteration key for this service",
     )        
-    service = models.CharField(
-        max_length=255,
-        blank=True,
-        default="",
-        help_text="Transliteration Service",
-    )                
