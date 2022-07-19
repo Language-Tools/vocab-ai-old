@@ -43,6 +43,7 @@ export const actions = {
                 name: response.data[language_id]
                 });
             }
+            languagesArray = languagesArray.sort((a, b) => a.name.localeCompare(b.name));
             commit('SET_ALL_LANGUAGES', languagesArray);
             resolve();
         });

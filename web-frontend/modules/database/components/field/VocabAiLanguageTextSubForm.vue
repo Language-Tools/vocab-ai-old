@@ -36,23 +36,15 @@ export default {
       values: {
         language: '',
       },
-      languageList: [],
     }
   },
-  created() {
-      CloudLanguageToolsService(this.$client).fetchAllLanguages().then((response) => {
-        let result = [];
-        for (const language_id in response.data) {
-          result.push({
-            id: language_id,
-            name: response.data[language_id]
-          });
-        }    
-        console.log("result: ", result);
-        this.languageList = result;
-      });
-  },
   computed: {
+    languageList() {
+      console.log("computed: languageList");
+      const allLanguages = this.$store.getters['cloudlanguagetools/allLanguages'];
+      console.log("allLanguages: ", allLanguages);
+      return allLanguages;
+    },    
   },  
   methods: {
     async languageSelected() {
