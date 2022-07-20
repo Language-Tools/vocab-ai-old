@@ -95,7 +95,7 @@ click-plugins==1.1.1
     # via celery
 click-repl==0.2.0
     # via celery
-cloudlanguagetools==0.7
+cloudlanguagetools==0.8
     # via -r base.in
 constantly==15.1.0
     # via twisted
@@ -277,7 +277,7 @@ pathy==0.6.2
     # via spacy
 pillow==9.0.0
     # via -r base.in
-pinyin-jyutping-sentence==1.1
+pinyin-jyutping-sentence==1.3
     # via cloudlanguagetools
 preshed==3.0.6
     # via
