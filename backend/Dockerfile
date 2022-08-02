@@ -28,6 +28,7 @@ RUN apt-get update &&  \
     python3-dev \
     nano \
     vim \
+    wget \
     && apt-get autoclean \
     && apt-get clean \
     && apt-get autoremove \
