@@ -34,6 +34,8 @@ RUN apt-get update &&  \
     && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir /clt_data && chown $UID:$GID /clt_data
+
 USER $UID:$GID
 
 # In slim docker images, mime.types is removed and we need it for mimetypes guessing
@@ -48,21 +50,21 @@ ENV PIP_CACHE_DIR=/tmp/baserow_pip_cache
 # hadolint ignore=SC1091,DL3042
 RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install  -r /baserow/requirements/base.txt
 
+# install cloudlanguagetools requirements, as separate docker instructions to benefit from caching
+# pre-requisites, which should not change often (install language packs)
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_spacy==0.1
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install --no-cache-dir clt_argostranslate==0.4
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_wenlin==0.6
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_requirements==0.1
+# cloudlanguagetools, change version as required
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install cloudlanguagetools==1.9
+
 # Build a dev_deps stage which also has the dev dependencies for use by the dev layer.
 FROM base as dev_deps
 
 COPY ./backend/requirements/dev.txt /baserow/requirements/
 # hadolint ignore=SC1091,DL3042
 RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install -r /baserow/requirements/dev.txt
-
-# install cloudlanguagetools requirements, as separate docker instructions to benefit from caching
-# pre-requisites, which should not change often (install language packs)
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_spacy==0.1
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_argostranslate==0.2
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_wenlin==0.6
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_requirements==0.1
-# cloudlanguagetools, change version as required
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install cloudlanguagetools==1.9
 
 # The core stage contains all of Baserows source code and sets up the entrypoint
 FROM base as core
