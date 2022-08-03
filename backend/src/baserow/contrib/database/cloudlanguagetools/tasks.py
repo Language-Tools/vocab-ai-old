@@ -21,6 +21,9 @@ def setup_periodic_tasks(sender, **kwargs):
     # period = 30
     period = 3600 * 3
     sender.add_periodic_task(period, refresh_cloudlanguagetools_language_data.s(), name='cloudlanguagetools language data')
+    
+    # run once at startup
+    refresh_cloudlanguagetools_language_data.delay()
 
 
 # noinspection PyUnusedLocal
