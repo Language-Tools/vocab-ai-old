@@ -27,7 +27,8 @@ import {
 import {
   LanguageFieldType,
   TranslationFieldType,
-  TransliterationFieldType
+  TransliterationFieldType,
+  DictionaryLookupFieldType
 } from '@baserow/modules/database/vocabAiFieldTypes'
 
 import {
@@ -302,6 +303,7 @@ export default (context) => {
   app.$registry.register('field', new LanguageFieldType(context))
   app.$registry.register('field', new TranslationFieldType(context))
   app.$registry.register('field', new TransliterationFieldType(context))
+  app.$registry.register('field', new DictionaryLookupFieldType(context))
 
   app.$registry.register('importer', new CSVImporterType(context))
   app.$registry.register('importer', new PasteImporterType(context))

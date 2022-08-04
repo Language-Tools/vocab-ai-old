@@ -122,6 +122,10 @@ export const getters = {
       transliterationOptionsForLanguage: (state) => (language) => {
         return state.allTransliterationOptions.filter((entry) => entry['language_code'] == language);
       },
+
+      dictionaryLookupOptionsForLanguage: (state) => (language) => {
+        return state.allDictionaryLookupOptions.filter((entry) => entry['language_code'] == language);
+      },      
 }
 
 export default {
