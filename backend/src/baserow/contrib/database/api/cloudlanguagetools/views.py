@@ -82,6 +82,28 @@ class CloudLanguageToolsTransliterationOptions(APIView):
         language_data = clt_instance.get_transliteration_options()
         return Response(language_data)
 
+class CloudLanguageToolsDictionaryLookupOptions(APIView):
+    authentication_classes = APIView.authentication_classes + [TokenAuthentication]
+    permission_classes = (IsAuthenticated,)
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [AllowAny()]
+
+        return super().get_permissions()
+
+    @extend_schema(
+        tags=["cloudlanguagetools language data"],
+        operation_id="dictionary_lookup_options",
+        description=(
+            "Retrieve all languages, translation and transliteration options"
+        ),
+    )
+    @method_permission_classes([AllowAny])
+    def get(self, request):
+        language_data = clt_instance.get_dictionary_lookup_options()
+        return Response(language_data)        
+
 class CloudLanguageToolsTranslationServices(APIView):
     authentication_classes = APIView.authentication_classes + [TokenAuthentication]
     permission_classes = (IsAuthenticated,)

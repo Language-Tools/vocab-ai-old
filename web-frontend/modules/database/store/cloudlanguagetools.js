@@ -5,6 +5,7 @@ export const state = () => ({
   allTranslationOptions: [],
   allTransliterationOptions: [],
   allTranslationServices: [],
+  allDictionaryLookupOptions: [],
 })
 
 export const mutations = {
@@ -17,6 +18,9 @@ export const mutations = {
   SET_ALL_TRANSLITERATION_OPTIONS(state, allTransliterationOptions) {
     state.allTransliterationOptions = allTransliterationOptions;
   },  
+  SET_ALL_DICTIONARY_LOOKUP_OPTIONS(state, allDictionaryLookupOptions) {
+    state.allDictionaryLookupOptions = allDictionaryLookupOptions;
+  },    
   SET_ALL_TRANSLATION_SERVICES(state, allTranslationServices) {
     state.allTranslationServices = allTranslationServices;
   },  
@@ -29,6 +33,7 @@ export const actions = {
     await dispatch('fetchAllLanguages');
     await dispatch('fetchAllTranslationOptions');
     await dispatch('fetchAllTransliterationOptions');
+    await dispatch('fetchAllDictionaryLookupOptions');
   },
 
   async fetchAllLanguages({ commit, getters, dispatch }, table) {
@@ -78,6 +83,15 @@ export const actions = {
         });
     });
   },  
+
+  async fetchAllDictionaryLookupOptions({ commit, getters, dispatch }, table) {
+    return new Promise((resolve, reject) => {
+        CloudLanguageToolsService(this.$client).fetchAllDictionaryLookupOptions().then((response) => {
+            commit('SET_ALL_DICTIONARY_LOOKUP_OPTIONS', response.data);
+            resolve();
+        });
+    });
+  },    
 
 
 }

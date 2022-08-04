@@ -29,6 +29,10 @@ def get_transliteration_options():
     redis_key = 'cloudlanguagetools:language_data:transliteration_options'
     return json.loads(redis_client.get(redis_key))
 
+def get_dictionary_lookup_options():
+    redis_key = 'cloudlanguagetools:language_data:dictionary_lookup_options'
+    return json.loads(redis_client.get(redis_key))    
+
 def get_translation_services_source_target_language(source_language, target_language):
     translation_options = get_translation_options()
     source_language_options = [x for x in translation_options if x['language_code'] == source_language]
