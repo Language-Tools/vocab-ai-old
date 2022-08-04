@@ -56,3 +56,19 @@ class TransliterationField(Field):
         default="",
         help_text="Transliteration key for this service",
     )        
+
+class DictionaryLookupField(Field):
+    source_field = models.ForeignKey(
+        LanguageField,
+        on_delete=models.CASCADE,
+        help_text="The field to do dictionary lookup for.",
+        null=True,
+        blank=True,
+        related_name='+'
+    )    
+    lookup_id = models.CharField(
+        max_length=2048,
+        blank=True,
+        default="",
+        help_text="Dictionary lookup key for this service",
+    )            

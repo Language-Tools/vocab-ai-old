@@ -61,3 +61,13 @@ def get_transliteration(text, transliteration_id):
 
     translated_text = clt_instance.get_transliteration(text, service, transliteration_key)
     return translated_text    
+
+
+def get_dictionary_lookup(text, lookup_id):
+    dictionary_lookup_options = get_dictionary_lookup_options()
+    lookup_option = [x for x in dictionary_lookup_options if x['lookup_id'] == lookup_id]
+    service = lookup_option[0]['service']
+    lookup_key = lookup_option[0]['lookup_key']
+
+    lookup_result = clt_instance.get_dictionary_lookup(text, service, lookup_key)
+    return str(lookup_result)
