@@ -400,8 +400,8 @@ class DictionaryLookupFieldType(FieldType):
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
                 text = getattr(row, source_internal_field_name)
-                transliterated_text = clt_instance.get_transliteration(text, transliteration_id)
-                setattr(row, target_internal_field_name, transliterated_text)
+                lookup_result = clt_instance.get_dictionary_lookup(text, lookup_id)
+                setattr(row, target_internal_field_name, lookup_result)
 
         update_collector.add_field_with_pending_update_function(
             field,
