@@ -57,7 +57,7 @@ RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baser
 RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_wenlin==0.6
 RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install clt_requirements==0.1
 # cloudlanguagetools, change version as required
-RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install cloudlanguagetools==1.9
+RUN --mount=type=cache,mode=777,target=$PIP_CACHE_DIR,uid=$UID,gid=$GID . /baserow/venv/bin/activate && pip3 install cloudlanguagetools==2.0
 
 # Build a dev_deps stage which also has the dev dependencies for use by the dev layer.
 FROM base as dev_deps
