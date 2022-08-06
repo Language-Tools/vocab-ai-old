@@ -42,6 +42,8 @@ def run_clt_translation_all_rows(self, table_id, source_language, target_languag
 )
 def run_clt_translation(self, text, source_language, target_language, service, table_id, row_id, target_field_id):
     logger.info(f'run_cloudlanguagetoools {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
+    if text == None or len(text) == 0:
+        return
 
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
@@ -108,6 +110,8 @@ def run_clt_transliteration_all_rows(self, table_id, transliteration_id, source_
 )
 def run_clt_transliteration(self, text, transliteration_id, table_id, row_id, target_field_id):
     logger.info(f'run_clt_transliteration {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
+    if text == None or len(text) == 0:
+        return    
 
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
@@ -173,6 +177,8 @@ def run_clt_lookup_all_rows(self, table_id, lookup_id, source_field_id, target_f
 )
 def run_clt_lookup(self, text, lookup_id, table_id, row_id, target_field_id):
     logger.info(f'run_clt_lookup {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
+    if text == None or len(text) == 0:
+        return
 
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)

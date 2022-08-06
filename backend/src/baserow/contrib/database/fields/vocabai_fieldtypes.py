@@ -150,8 +150,9 @@ class TranslationFieldType(FieldType):
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
                 text = getattr(row, source_internal_field_name)
-                translated_text = clt_instance.get_translation(text, source_language, target_language, translation_service)
-                setattr(row, target_internal_field_name, translated_text)
+                if text != None:
+                    translated_text = clt_instance.get_translation(text, source_language, target_language, translation_service)
+                    setattr(row, target_internal_field_name, translated_text)
 
         update_collector.add_field_with_pending_update_function(
             field,
@@ -275,8 +276,9 @@ class TransliterationFieldType(FieldType):
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
                 text = getattr(row, source_internal_field_name)
-                transliterated_text = clt_instance.get_transliteration(text, transliteration_id)
-                setattr(row, target_internal_field_name, transliterated_text)
+                if text != None:
+                    transliterated_text = clt_instance.get_transliteration(text, transliteration_id)
+                    setattr(row, target_internal_field_name, transliterated_text)
 
         update_collector.add_field_with_pending_update_function(
             field,
@@ -395,8 +397,9 @@ class DictionaryLookupFieldType(FieldType):
             target_internal_field_name = f'field_{field.id}'
             for row in rows:
                 text = getattr(row, source_internal_field_name)
-                lookup_result = clt_instance.get_dictionary_lookup(text, lookup_id)
-                setattr(row, target_internal_field_name, lookup_result)
+                if text != None:
+                    lookup_result = clt_instance.get_dictionary_lookup(text, lookup_id)
+                    setattr(row, target_internal_field_name, lookup_result)
 
         update_collector.add_field_with_pending_update_function(
             field,

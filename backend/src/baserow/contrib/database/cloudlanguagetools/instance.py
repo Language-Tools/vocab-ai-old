@@ -69,5 +69,8 @@ def get_dictionary_lookup(text, lookup_id):
     service = lookup_option[0]['service']
     lookup_key = lookup_option[0]['lookup_key']
 
-    lookup_result = clt_instance.get_dictionary_lookup(text, service, lookup_key)
-    return str(lookup_result)
+    try:
+        lookup_result = clt_instance.get_dictionary_lookup(text, service, lookup_key)
+        return str(lookup_result)
+    except cloudlanguagetools.errors.NotFoundError:
+        return None
