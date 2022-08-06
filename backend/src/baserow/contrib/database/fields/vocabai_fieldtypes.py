@@ -10,7 +10,7 @@ from baserow.contrib.database.views.handler import ViewHandler
 
 from .vocabai_models import TranslationField, TransliterationField, LanguageField, DictionaryLookupField
 
-from .tasks import run_clt_translation, run_clt_translation_all_rows
+from .tasks import run_clt_translation, run_clt_translation_all_rows, run_clt_transliteration_all_rows
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
 import logging
@@ -295,23 +295,18 @@ class TransliterationFieldType(FieldType):
 
 
     def update_all_rows(self, field):
-        return # skip for now
-
         logger.info(f'update_all_rows')
-        source_field_language = field.source_field.language
-        target_language = field.target_language
-        translation_service = field.service          
+        transliteration_id = field.transliteration_id
         source_field_id = f'field_{field.source_field.id}'
         target_field_id = f'field_{field.id}'
 
         table_id = field.table.id
 
-        run_clt_translation_all_rows.delay(table_id, 
-                                           source_field_language, 
-                                           target_language,
-                                           translation_service,
-                                           source_field_id, 
-                                           target_field_id)
+
+        run_clt_transliteration_all_rows.delay(table_id, 
+                                                transliteration_id,
+                                                source_field_id, 
+                                                target_field_id)
 
     def after_create(self, field, model, user, connection, before):
         self.update_all_rows(field)
