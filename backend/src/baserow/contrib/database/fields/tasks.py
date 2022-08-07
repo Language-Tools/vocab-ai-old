@@ -111,10 +111,10 @@ def run_clt_translation_many_rows(self, source_language, target_language, servic
     for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
         text = getattr(row, source_field_id)
         if text != None and len(text) > 0:
-            logger.info(f'getting translation for row {row}, text: {text}')
+            # logger.info(f'getting translation for row {row}, text: {text}')
             translated_text = clt_instance.get_translation(text, source_language, target_language, service)
             setattr(row, target_field_id, translated_text)
-            logger.info(f'updated row: {row}')
+            # logger.info(f'updated row: {row}')
             row.save()
 
 
@@ -144,10 +144,10 @@ def run_clt_transliteration_many_rows(self, transliteration_id, table_id, row_id
     for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
         text = getattr(row, source_field_id)
         if text != None and len(text) > 0:
-            logger.info(f'getting transliteration for row {row}, text: {text}')
+            # logger.info(f'getting transliteration for row {row}, text: {text}')
             result = clt_instance.get_transliteration(text, transliteration_id)
             setattr(row, target_field_id, result)
-            logger.info(f'updated row: {row}')
+            # logger.info(f'updated row: {row}')
             row.save()    
 
 
@@ -177,8 +177,8 @@ def run_clt_lookup_many_rows(self, lookup_id, table_id, row_id_list, source_fiel
     for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
         text = getattr(row, source_field_id)
         if text != None and len(text) > 0:
-            logger.info(f'getting lookup for row {row}, text: {text}')
+            # logger.info(f'getting lookup for row {row}, text: {text}')
             result = clt_instance.get_dictionary_lookup(text, lookup_id)
             setattr(row, target_field_id, result)
-            logger.info(f'updated row: {row}')
+            # logger.info(f'updated row: {row}')
             row.save()
