@@ -97,6 +97,7 @@ def process_row_id_bucket_iterate_rows(table_id, row_id_list):
 )
 def run_clt_translation_all_rows(self, table_id, source_language, target_language, service, source_field_id, target_field_id):
     for row_id_list in iterate_row_id_buckets(table_id):
+        logger.info(f'scheduling translation for bucket of {len(row_id_list)} rows')
         run_clt_translation_many_rows.delay(source_language, target_language, service, table_id, row_id_list, source_field_id, target_field_id)
 
 @app.task(
@@ -129,6 +130,7 @@ def run_clt_translation_many_rows(self, source_language, target_language, servic
 )
 def run_clt_transliteration_all_rows(self, table_id, transliteration_id, source_field_id, target_field_id):
     for row_id_list in iterate_row_id_buckets(table_id):
+        logger.info(f'scheduling transliteration for bucket of {len(row_id_list)} rows')
         run_clt_transliteration_many_rows.delay(transliteration_id, table_id, row_id_list, source_field_id, target_field_id)
 
 @app.task(
@@ -160,6 +162,7 @@ def run_clt_transliteration_many_rows(self, transliteration_id, table_id, row_id
 )
 def run_clt_lookup_all_rows(self, table_id, lookup_id, source_field_id, target_field_id):
     for row_id_list in iterate_row_id_buckets(table_id):
+        logger.info(f'scheduling lookup for bucket of {len(row_id_list)} rows')
         run_clt_lookup_many_rows.delay(lookup_id, table_id, row_id_list, source_field_id, target_field_id)
 
 
