@@ -10,7 +10,7 @@ from baserow.contrib.database.views.handler import ViewHandler
 
 from .vocabai_models import TranslationField, TransliterationField, LanguageField, DictionaryLookupField
 
-from .tasks import run_clt_translation, run_clt_translation_all_rows, run_clt_transliteration_all_rows, run_clt_lookup_all_rows
+from .tasks import run_clt_translation_all_rows, run_clt_transliteration_all_rows, run_clt_lookup_all_rows
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
 import logging

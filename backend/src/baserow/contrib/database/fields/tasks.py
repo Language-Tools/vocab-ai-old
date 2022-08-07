@@ -1,7 +1,7 @@
 from baserow.config.celery import app
 
 from baserow.contrib.database.table.models import Table
-from baserow.contrib.database.rows.signals import row_updated, before_row_update
+from baserow.contrib.database.rows.signals import row_updated, before_row_update, before_rows_update, rows_updated
 
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
@@ -14,6 +14,78 @@ EXPORT_SOFT_TIME_LIMIT = 60 * 60
 EXPORT_TIME_LIMIT = EXPORT_SOFT_TIME_LIMIT + 60
 
 
+TASK_ITERATION_SIZE_PLAN = [
+    [5, 1],
+    [5, 2],
+    [5, 10],
+    [5, 100],
+    [5, 500],
+    [5, 2000],
+    [5, 200000]
+]
+
+def iterate_row_id_buckets(table_id):
+    step_size_array = []
+    for entry in TASK_ITERATION_SIZE_PLAN:
+        count = entry[0]
+        step_size = entry[1]
+        for i in range(0, count):
+            step_size_array.append(step_size)
+
+    # first, collect all row IDs
+    base_queryset = Table.objects
+    table = base_queryset.select_related("database__group").get(id=table_id)
+    # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
+    table_model = table.get_model()
+    row_id_list = []
+    for row in table_model.objects.all():
+        row_id = row.id
+        row_id_list.append(row_id)    
+
+    while len(row_id_list) > 0:
+        iteration_size = step_size_array[0]
+        step_size_array = step_size_array[1:]
+        iteration_row_id_list = row_id_list[0:iteration_size]
+        row_id_list = row_id_list[iteration_size:]
+        yield iteration_row_id_list
+
+
+def process_row_id_bucket_iterate_rows(table_id, row_id_list):
+
+    base_queryset = Table.objects
+    table = base_queryset.select_related("database__group").get(id=table_id)
+    # logger.info(f'table: {table}')
+
+    table_model = table.get_model()
+
+    row_list = []
+    for row_id in row_id_list:
+        row = table_model.objects.get(id=row_id)
+        row_list.append(row)
+
+    before_return = before_rows_update.send(
+        None,
+        rows=row_list,
+        user=None,
+        table=table,
+        model=table_model,
+        updated_field_ids=None,
+    )
+
+    for row in row_list:
+        yield row
+
+    rows_updated.send(
+        None,
+        rows=row_list,
+        user=None,
+        table=table,
+        model=table_model,
+        before_return=before_return,
+        updated_field_ids=None
+    )
+
+
 # translation 
 # ===========
 
@@ -24,62 +96,26 @@ EXPORT_TIME_LIMIT = EXPORT_SOFT_TIME_LIMIT + 60
     time_limit=EXPORT_TIME_LIMIT,
 )
 def run_clt_translation_all_rows(self, table_id, source_language, target_language, service, source_field_id, target_field_id):
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
-    table_model = table.get_model()
-    for row in table_model.objects.all():
-        row_id = row.id
-        text = getattr(row, source_field_id)
-        # logger.info(f'row: {row}')
-        run_clt_translation.delay(text, source_language, target_language, service, table_id, row_id, target_field_id)
+    for row_id_list in iterate_row_id_buckets(table_id):
+        run_clt_translation_many_rows.delay(source_language, target_language, service, table_id, row_id_list, source_field_id, target_field_id)
 
-# noinspection PyUnusedLocal
 @app.task(
     bind=True,
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_translation(self, text, source_language, target_language, service, table_id, row_id, target_field_id):
-    logger.info(f'run_cloudlanguagetoools {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
-    if text == None or len(text) == 0:
-        return
+def run_clt_translation_many_rows(self, source_language, target_language, service, table_id, row_id_list, source_field_id, target_field_id):
+    logger.info(f'run_clt_translation_many_rows table_id: {table_id} row count: {len(row_id_list)}')
 
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    logger.info(f'table: {table}')
+    for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
+        text = getattr(row, source_field_id)
+        if text != None and len(text) > 0:
+            logger.info(f'getting translation for row {row}, text: {text}')
+            translated_text = clt_instance.get_translation(text, source_language, target_language, service)
+            setattr(row, target_field_id, translated_text)
+            logger.info(f'updated row: {row}')
+            row.save()
 
-    # logger.info(f'table vars: {vars(table)}')
-    table_model = table.get_model()
-    row = table_model.objects.get(id=row_id)
-    # row.refresh_from_db(fields=model.fields_requiring_refresh_after_update())
-    logger.info(f'row: {row}')
-
-
-    before_return = before_row_update.send(
-        self,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        updated_field_ids=None,
-    )
-
-    translated_text = clt_instance.get_translation(text, source_language, target_language, service)
-
-    setattr(row, target_field_id, translated_text)
-    logger.info(f'updated row: {row}')
-    row.save()
-
-    row_updated.send(
-        None,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        before_return=before_return,
-        updated_field_ids=None
-    )
 
 
 # transliteration
@@ -92,65 +128,26 @@ def run_clt_translation(self, text, source_language, target_language, service, t
     time_limit=EXPORT_TIME_LIMIT,
 )
 def run_clt_transliteration_all_rows(self, table_id, transliteration_id, source_field_id, target_field_id):
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
-    table_model = table.get_model()
-    for row in table_model.objects.all():
-        row_id = row.id
-        text = getattr(row, source_field_id)
-        # logger.info(f'row: {row}')
-        run_clt_transliteration.delay(text, transliteration_id, table_id, row_id, target_field_id)
+    for row_id_list in iterate_row_id_buckets(table_id):
+        run_clt_transliteration_many_rows.delay(transliteration_id, table_id, row_id_list, source_field_id, target_field_id)
 
-# noinspection PyUnusedLocal
 @app.task(
     bind=True,
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_transliteration(self, text, transliteration_id, table_id, row_id, target_field_id):
-    logger.info(f'run_clt_transliteration {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
-    if text == None or len(text) == 0:
-        return    
+def run_clt_transliteration_many_rows(self, transliteration_id, table_id, row_id_list, source_field_id, target_field_id):
+    logger.info(f'run_clt_transliteration_many_rows table_id: {table_id} row count: {len(row_id_list)} field_id: {target_field_id}')
 
-    # for performance testing only
-    # time.sleep(5)
+    for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
+        text = getattr(row, source_field_id)
+        if text != None and len(text) > 0:
+            logger.info(f'getting transliteration for row {row}, text: {text}')
+            result = clt_instance.get_transliteration(text, transliteration_id)
+            setattr(row, target_field_id, result)
+            logger.info(f'updated row: {row}')
+            row.save()    
 
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    logger.info(f'table: {table}')
-
-    # logger.info(f'table vars: {vars(table)}')
-    table_model = table.get_model()
-    row = table_model.objects.get(id=row_id)
-    # row.refresh_from_db(fields=model.fields_requiring_refresh_after_update())
-    logger.info(f'row: {row}')
-
-
-    before_return = before_row_update.send(
-        self,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        updated_field_ids=None,
-    )
-
-    result = clt_instance.get_transliteration(text, transliteration_id)
-
-    setattr(row, target_field_id, result)
-    logger.info(f'updated row: {row}')
-    row.save()
-
-    row_updated.send(
-        None,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        before_return=before_return,
-        updated_field_ids=None
-    )
 
 # dictionary lookup
 # =================
@@ -162,59 +159,23 @@ def run_clt_transliteration(self, text, transliteration_id, table_id, row_id, ta
     time_limit=EXPORT_TIME_LIMIT,
 )
 def run_clt_lookup_all_rows(self, table_id, lookup_id, source_field_id, target_field_id):
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    # https://docs.djangoproject.com/en/4.0/ref/models/querysets/
-    table_model = table.get_model()
-    for row in table_model.objects.all():
-        row_id = row.id
-        text = getattr(row, source_field_id)
-        # logger.info(f'row: {row}')
-        run_clt_lookup.delay(text, lookup_id, table_id, row_id, target_field_id)
+    for row_id_list in iterate_row_id_buckets(table_id):
+        run_clt_lookup_many_rows.delay(lookup_id, table_id, row_id_list, source_field_id, target_field_id)
 
-# noinspection PyUnusedLocal
+
 @app.task(
     bind=True,
     soft_time_limit=EXPORT_SOFT_TIME_LIMIT,
     time_limit=EXPORT_TIME_LIMIT,
 )
-def run_clt_lookup(self, text, lookup_id, table_id, row_id, target_field_id):
-    logger.info(f'run_clt_lookup {text} table_id: {table_id} row_id: {row_id} field_id: {target_field_id}')
-    if text == None or len(text) == 0:
-        return
+def run_clt_lookup_many_rows(self, lookup_id, table_id, row_id_list, source_field_id, target_field_id):
+    logger.info(f'run_clt_lookup_many_rows table_id: {table_id} row count: {len(row_id_list)} field_id: {target_field_id}')
 
-    base_queryset = Table.objects
-    table = base_queryset.select_related("database__group").get(id=table_id)
-    logger.info(f'table: {table}')
-
-    # logger.info(f'table vars: {vars(table)}')
-    table_model = table.get_model()
-    row = table_model.objects.get(id=row_id)
-    # row.refresh_from_db(fields=model.fields_requiring_refresh_after_update())
-    logger.info(f'row: {row}')
-
-
-    before_return = before_row_update.send(
-        self,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        updated_field_ids=None,
-    )
-
-    result = clt_instance.get_dictionary_lookup(text, lookup_id)
-
-    setattr(row, target_field_id, result)
-    logger.info(f'updated row: {row}')
-    row.save()
-
-    row_updated.send(
-        None,
-        row=row,
-        user=None,
-        table=table,
-        model=table_model,
-        before_return=before_return,
-        updated_field_ids=None
-    )
+    for row in process_row_id_bucket_iterate_rows(table_id, row_id_list):
+        text = getattr(row, source_field_id)
+        if text != None and len(text) > 0:
+            logger.info(f'getting lookup for row {row}, text: {text}')
+            result = clt_instance.get_dictionary_lookup(text, lookup_id)
+            setattr(row, target_field_id, result)
+            logger.info(f'updated row: {row}')
+            row.save()
