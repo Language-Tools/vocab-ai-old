@@ -113,6 +113,9 @@ def run_clt_transliteration(self, text, transliteration_id, table_id, row_id, ta
     if text == None or len(text) == 0:
         return    
 
+    # for performance testing only
+    # time.sleep(5)
+
     base_queryset = Table.objects
     table = base_queryset.select_related("database__group").get(id=table_id)
     logger.info(f'table: {table}')

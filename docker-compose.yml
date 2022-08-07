@@ -239,6 +239,23 @@ services:
     networks:
       local:
 
+  celery-cloudlanguagetools-worker:
+    image: baserow/backend:1.10.0
+    restart: unless-stopped
+    command: celery-cloudlanguagetoolsworker
+    # The backend image's baked in healthcheck defaults to the django healthcheck
+    # override it to the celery one here.
+    healthcheck:
+      test: [ "CMD-SHELL", "exit 0" ]
+    depends_on:
+      - backend
+    environment:
+      <<: *common-backend-variables
+    volumes:
+      - media:/baserow/media
+    networks:
+      local:
+
   celery-beat-worker:
     image: baserow/backend:1.10.0
     restart: unless-stopped

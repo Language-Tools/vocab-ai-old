@@ -102,6 +102,25 @@ services:
     stdin_open: true
     tty: true
 
+  celery-cloudlanguagetools-worker:
+    image: baserow_backend_dev:latest
+    build:
+      dockerfile: ./backend/Dockerfile
+      context: .
+      target: dev
+      args:
+        # We allow configuring the UID/GID here so you can run as the dev's actual user
+        # reducing the chance the containers screw up the bind mounted folders.
+        UID: $UID
+        GID: $GID
+    command: "watch-py celery-cloudlanguagetoolsworker"
+    volumes:
+      - ./backend:/baserow/backend
+      - ./premium/backend/:/baserow/premium/backend
+    # Open stdin and tty so when attaching key input works as expected.
+    stdin_open: true
+    tty: true    
+
   celery-beat-worker:
     image: baserow_backend_dev:latest
     build:

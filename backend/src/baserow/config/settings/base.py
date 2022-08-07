@@ -100,6 +100,13 @@ CELERY_TASK_ROUTES = {
         "queue": "export"
     },
     "baserow.core.trash.tasks.permanently_delete_marked_trash": {"queue": "export"},
+    # cloud language tools jobs go on a separate queue
+    "baserow.contrib.database.fields.tasks.run_clt_translation_all_rows": {"queue": "cloudlanguagetools"},
+    "baserow.contrib.database.fields.tasks.run_clt_translation": {"queue": "cloudlanguagetools"},
+    "baserow.contrib.database.fields.tasks.run_clt_transliteration_all_rows": {"queue": "cloudlanguagetools"},
+    "baserow.contrib.database.fields.tasks.run_clt_transliteration": {"queue": "cloudlanguagetools"},
+    "baserow.contrib.database.fields.tasks.run_clt_lookup_all_rows": {"queue": "cloudlanguagetools"},
+    "baserow.contrib.database.fields.tasks.run_clt_lookup": {"queue": "cloudlanguagetools"},
 }
 CELERY_SOFT_TIME_LIMIT = 60 * 5  # 5 minutes
 CELERY_TIME_LIMIT = CELERY_SOFT_TIME_LIMIT + 60  # 60 seconds
