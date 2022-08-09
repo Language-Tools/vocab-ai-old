@@ -1,7 +1,7 @@
 from baserow.config.celery import app
 
 from baserow.contrib.database.table.models import Table
-from baserow.contrib.database.rows.signals import row_updated, before_row_update, before_rows_update, rows_updated
+from baserow.contrib.database.rows.signals import before_rows_update, rows_updated
 
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
