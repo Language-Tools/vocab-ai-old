@@ -1,9 +1,5 @@
 from collections import defaultdict
-<<<<<<< HEAD
-from typing import Optional, Dict, List, Tuple, Callable
-=======
-from typing import Optional, Dict, List, Tuple, Set, cast
->>>>>>> 1.11.0
+from typing import Optional, Dict, List, Tuple, Set, cast, Callable
 
 from django.db.models import Expression, Q
 
@@ -11,7 +7,7 @@ from baserow.contrib.database.fields.dependencies.exceptions import InvalidViaPa
 from baserow.contrib.database.fields.field_cache import FieldCache
 from baserow.contrib.database.fields.models import Field, LinkRowField
 from baserow.contrib.database.fields.signals import field_updated
-from baserow.contrib.database.table.models import Table
+from baserow.contrib.database.table.models import Table, GeneratedTableModel
 
 StartingRowIdsType = Optional[List[int]]
 
