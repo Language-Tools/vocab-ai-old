@@ -2,6 +2,7 @@
   <Context>
     <ViewDecoratorList
       v-if="activeDecorations.length === 0"
+      :database="database"
       :view="view"
       @select="addDecoration($event)"
     />
@@ -17,11 +18,11 @@
               <ViewDecoratorItem :decorator-type="dec.decoratorType" />
             </div>
             <div
-              v-show="dec.decoration.value_provider_type"
+              v-show="dec.valueProviderType"
               class="decorator-context__decorator-header-select"
             >
               <Picker
-                v-if="dec.decoration.value_provider_type"
+                v-if="dec.valueProviderType"
                 :icon="dec.valueProviderType.getIconClass()"
                 :name="dec.valueProviderType.getName()"
                 @select="selectValueProvider(dec.decoration, $event)"
@@ -59,7 +60,6 @@
             v-if="dec.valueProviderType"
             :view="view"
             :table="table"
-            :primary="primary"
             :fields="fields"
             :read-only="readOnly"
             :options="dec.decoration.value_provider_conf"
@@ -92,6 +92,7 @@
         </a>
         <SelectViewDecoratorContext
           ref="selectDecoratorContext"
+          :database="database"
           :view="view"
           @select="
             ;[$refs.selectDecoratorContext.hide(), addDecoration($event)]
@@ -104,6 +105,7 @@
 
 <script>
 import context from '@baserow/modules/core/mixins/context'
+import viewDecoration from '@baserow/modules/database/mixins/viewDecoration'
 import ViewDecoratorList from '@baserow/modules/database/components/view/ViewDecoratorList'
 import ViewDecoratorItem from '@baserow/modules/database/components/view/ViewDecoratorItem'
 import SelectViewDecoratorContext from '@baserow/modules/database/components/view/SelectViewDecoratorContext'
@@ -120,9 +122,9 @@ export default {
     SelectViewDecoratorContext,
     DecoratorValueProviderList,
   },
-  mixins: [context],
+  mixins: [context, viewDecoration],
   props: {
-    primary: {
+    database: {
       type: Object,
       required: true,
     },
@@ -141,42 +143,6 @@ export default {
     readOnly: {
       type: Boolean,
       required: true,
-    },
-  },
-  computed: {
-    allFields() {
-      return [this.primary, ...this.fields]
-    },
-    augmentedDecorations() {
-      return this.view.decorations.map((decoration) => {
-        const deco = { decoration }
-        deco.decoratorType = this.$registry.get(
-          'viewDecorator',
-          decoration.type
-        )
-
-        if (decoration.value_provider_type) {
-          deco.valueProviderType = this.$registry.get(
-            'decoratorValueProvider',
-            decoration.value_provider_type
-          )
-        }
-
-        deco.availableValueProviderTypes = this.$registry
-          .getOrderedList('decoratorValueProvider')
-          .filter((valueProviderType) =>
-            valueProviderType.isCompatible(deco.decoratorType)
-          )
-
-        deco.isDeactivated = deco.decoratorType.isDeactivated({
-          view: this.view,
-        })
-
-        return deco
-      })
-    },
-    activeDecorations() {
-      return this.augmentedDecorations.filter((deco) => !deco.isDeactivated)
     },
   },
   methods: {
@@ -202,7 +168,7 @@ export default {
             value_provider_type: valueProviderType.getType(),
             value_provider_conf: valueProviderType.getDefaultConfiguration({
               view: this.view,
-              fields: this.allFields,
+              fields: this.fields,
             }),
           },
           decoration,

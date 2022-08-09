@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from django.shortcuts import reverse
 from django.test.utils import override_settings
 from rest_framework.status import (
@@ -12,7 +13,9 @@ from baserow.core.action.handler import ActionHandler
 from baserow.core.action.registries import action_type_registry
 from baserow.core.action.scopes import ViewActionScopeType
 from baserow.contrib.database.views.actions import UpdateViewActionType
+from baserow.contrib.database.views.models import View
 from baserow.contrib.database.views.handler import ViewHandler
+from baserow.test_utils.helpers import assert_undo_redo_actions_are_valid
 
 from baserow_premium.views.models import KanbanView
 
@@ -34,6 +37,35 @@ def test_list_without_valid_premium_license(api_client, premium_data_fixture):
     url = reverse("api:database:views:kanban:list", kwargs={"view_id": kanban.id})
     response = api_client.get(url, **{"HTTP_AUTHORIZATION": f"JWT {token}"})
     assert response.status_code == HTTP_200_OK
+
+
+@pytest.mark.django_db
+@override_settings(DEBUG=True)
+def test_list_without_valid_premium_license_for_group(api_client, premium_data_fixture):
+    user, token = premium_data_fixture.create_user_and_token(
+        has_active_premium_license=True
+    )
+    kanban = premium_data_fixture.create_kanban_view(user=user)
+
+    with patch(
+        "baserow_premium.license.handler.has_active_premium_license_for"
+    ) as mock_has_active_premium_license_for:
+        mock_has_active_premium_license_for.return_value = [{"type": "group", "id": 0}]
+        url = reverse("api:database:views:kanban:list", kwargs={"view_id": kanban.id})
+        response = api_client.get(url, **{"HTTP_AUTHORIZATION": f"JWT {token}"})
+        assert response.status_code == HTTP_402_PAYMENT_REQUIRED
+        assert response.json()["error"] == "ERROR_NO_ACTIVE_PREMIUM_LICENSE"
+
+    with patch(
+        "baserow_premium.license.handler.has_active_premium_license_for"
+    ) as mock_has_active_premium_license_for:
+        mock_has_active_premium_license_for.return_value = [
+            {"type": "group", "id": kanban.table.database.group.id}
+        ]
+        premium_data_fixture.create_template(group=kanban.table.database.group)
+        url = reverse("api:database:views:kanban:list", kwargs={"view_id": kanban.id})
+        response = api_client.get(url, **{"HTTP_AUTHORIZATION": f"JWT {token}"})
+        assert response.status_code == HTTP_200_OK
 
 
 @pytest.mark.django_db
@@ -887,6 +919,7 @@ def test_update_kanban_view_card_cover_image_field(
 
 
 @pytest.mark.django_db
+@pytest.mark.undo_redo
 def test_can_undo_redo_update_kanban_view(data_fixture, premium_data_fixture):
     session_id = "session-id"
     user = data_fixture.create_user(session_id=session_id)
@@ -947,9 +980,7 @@ def test_can_undo_redo_update_kanban_view(data_fixture, premium_data_fixture):
     )
 
     kanban_view.refresh_from_db()
-    assert action_undone is not None
-    assert action_undone.type == UpdateViewActionType.type
-    assert action_undone.error is None
+    assert_undo_redo_actions_are_valid(action_undone, [UpdateViewActionType])
 
     assert kanban_view.name == original_kanban_data["name"]
     assert kanban_view.filter_type == original_kanban_data["filter_type"]
@@ -968,9 +999,7 @@ def test_can_undo_redo_update_kanban_view(data_fixture, premium_data_fixture):
     )
 
     kanban_view.refresh_from_db()
-    assert action_redone is not None
-    assert action_redone.type == UpdateViewActionType.type
-    assert action_redone.error is None
+    assert_undo_redo_actions_are_valid(action_redone, [UpdateViewActionType])
 
     assert kanban_view.name == new_kanban_data["name"]
     assert kanban_view.filter_type == new_kanban_data["filter_type"]
@@ -982,3 +1011,33 @@ def test_can_undo_redo_update_kanban_view(data_fixture, premium_data_fixture):
         kanban_view.card_cover_image_field_id
         == new_kanban_data["card_cover_image_field"].id
     )
+
+
+@pytest.mark.django_db
+def test_can_duplicate_kanban_view_with_cover_image(
+    api_client, data_fixture, premium_data_fixture
+):
+    user, token = premium_data_fixture.create_user_and_token(
+        has_active_premium_license=True
+    )
+    table = premium_data_fixture.create_database_table(user=user)
+    cover_image_file_field = data_fixture.create_file_field(table=table)
+    kanban_view = premium_data_fixture.create_kanban_view(
+        table=table, card_cover_image_field=cover_image_file_field
+    )
+
+    assert View.objects.count() == 1
+
+    response = api_client.post(
+        reverse("api:database:views:duplicate", kwargs={"view_id": kanban_view.id}),
+        format="json",
+        HTTP_AUTHORIZATION=f"JWT {token}",
+    )
+
+    response_json = response.json()
+    assert response.status_code == HTTP_200_OK
+    assert response_json["id"] != kanban_view.id
+    assert response_json["name"] == f"{kanban_view.name} 2"
+    assert response_json["card_cover_image_field"] == cover_image_file_field.id
+
+    assert View.objects.count() == 2

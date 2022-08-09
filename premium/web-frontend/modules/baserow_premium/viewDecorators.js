@@ -1,5 +1,13 @@
 import { ViewDecoratorType } from '@baserow/modules/database/viewDecorators'
+import PremiumModal from '@baserow_premium/components/PremiumModal'
 import { PremiumPlugin } from '@baserow_premium/plugins'
+
+import {
+  GridViewType,
+  GalleryViewType,
+} from '@baserow/modules/database/viewTypes'
+
+import { KanbanViewType } from './viewTypes'
 
 import leftBorderDecoratorImage from '@baserow_premium/assets/images/leftBorderDecorator.svg'
 import backgroundDecoratorImage from '@baserow_premium/assets/images/backgroundDecorator.svg'
@@ -35,12 +43,16 @@ export class LeftBorderColorViewDecoratorType extends ViewDecoratorType {
     return i18n.t('viewDecoratorType.onlyForPremium')
   }
 
-  isDeactivated() {
+  getDeactivatedClickModal() {
+    return PremiumModal
+  }
+
+  isDeactivated(groupId) {
     const { store } = this.app
 
     const additionalUserData = store.getters['auth/getAdditionalUserData']
 
-    if (PremiumPlugin.hasValidPremiumLicense(additionalUserData)) {
+    if (PremiumPlugin.hasValidPremiumLicense(additionalUserData, groupId)) {
       return false
     }
     return true
@@ -71,7 +83,13 @@ export class LeftBorderColorViewDecoratorType extends ViewDecoratorType {
   isCompatible(view) {
     const { store } = this.app
 
-    return ['grid'].includes(view.type) && !store.getters['view/grid/isPublic']
+    return (
+      [
+        GridViewType.getType(),
+        GalleryViewType.getType(),
+        KanbanViewType.getType(),
+      ].includes(view.type) && !store.getters['page/view/public/getIsPublic']
+    )
   }
 }
 
@@ -114,7 +132,13 @@ export class BackgroundColorViewDecoratorType extends ViewDecoratorType {
   isCompatible(view) {
     const { store } = this.app
 
-    return ['grid'].includes(view.type) && !store.getters['view/grid/isPublic']
+    return (
+      [
+        GridViewType.getType(),
+        GalleryViewType.getType(),
+        KanbanViewType.getType(),
+      ].includes(view.type) && !store.getters['page/view/public/getIsPublic']
+    )
   }
 
   getDeactivatedText() {
@@ -122,12 +146,16 @@ export class BackgroundColorViewDecoratorType extends ViewDecoratorType {
     return i18n.t('viewDecoratorType.onlyForPremium')
   }
 
-  isDeactivated() {
+  getDeactivatedClickModal() {
+    return PremiumModal
+  }
+
+  isDeactivated(groupId) {
     const { store } = this.app
 
     const additionalUserData = store.getters['auth/getAdditionalUserData']
 
-    if (PremiumPlugin.hasValidPremiumLicense(additionalUserData)) {
+    if (PremiumPlugin.hasValidPremiumLicense(additionalUserData, groupId)) {
       return false
     }
     return true

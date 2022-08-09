@@ -53,7 +53,13 @@ class TableWebhookCreateRequestSerializer(serializers.ModelSerializer):
 class TableWebhookUpdateRequestSerializer(serializers.ModelSerializer):
     events = serializers.ListField(
         required=False,
-        child=serializers.ChoiceField(choices=webhook_event_type_registry.get_types()),
+        child=serializers.ChoiceField(
+            choices=[
+                t
+                for t in webhook_event_type_registry.get_types()
+                if t not in ["row.created", "row.updated", "row.deleted"]
+            ]
+        ),
         help_text="A list containing the events that will trigger this webhook.",
     )
     headers = serializers.DictField(
@@ -183,6 +189,7 @@ class TableWebhookTestCallResponseSerializer(serializers.Serializer):
     @extend_schema_field(OpenApiTypes.STR)
     def get_request(self, instance):
         request = instance.get("request")
+
         if request is not None:
             return WebhookHandler().format_request(request)
         return ""

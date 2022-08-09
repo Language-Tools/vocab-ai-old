@@ -86,8 +86,20 @@ export default function CoreModule(options) {
           default: false,
         },
         {
+          key: 'BASEROW_MAX_IMPORT_FILE_SIZE_MB',
+          default: 512, // 512Mb
+        },
+        {
           key: 'FEATURE_FLAGS',
           default: '',
+        },
+        {
+          key: 'BASEROW_DISABLE_GOOGLE_DOCS_FILE_PREVIEW',
+          default: '',
+        },
+        {
+          key: 'BASEROW_MAX_SNAPSHOTS_PER_GROUP',
+          default: -1,
         },
       ],
     },
@@ -164,6 +176,7 @@ export default function CoreModule(options) {
   this.appendPlugin({ src: path.resolve(__dirname, 'plugins/auth.js') })
   this.appendPlugin({ src: path.resolve(__dirname, 'plugins/featureFlags.js') })
   this.appendPlugin({ src: path.resolve(__dirname, 'plugins/papa.js') })
+  this.appendPlugin({ src: path.resolve(__dirname, 'plugins/ensureRender.js') })
 
   this.extendRoutes((configRoutes) => {
     // Remove all the routes created by nuxt.

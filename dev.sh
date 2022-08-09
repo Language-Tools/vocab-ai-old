@@ -22,6 +22,7 @@ PRINT_WARNING=true
 new_tab() {
   TAB_NAME=$1
   COMMAND=$2
+  echo "Attempting to open tab with command $GREEN$COMMAND$NC"
 
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     if [ -x "$(command -v gnome-terminal)" ]; then
@@ -132,6 +133,7 @@ attach_all=false
 dev=true
 local=false
 all_in_one=false
+all_in_one_dev=false
 cloudron=false
 heroku=false
 env_set=false
@@ -191,6 +193,14 @@ case "${1:-noneleft}" in
         all_in_one=true
         dev=false
         build_dependencies=(local)
+        shift
+    ;;
+    all_in_one_dev)
+        echo "./dev.sh: Switching to all in one image"
+        ensure_only_one_env_selected_at_once
+        all_in_one_dev=true
+        dev=false
+        build_dependencies=(all_in_one)
         shift
     ;;
     cloudron)
@@ -303,16 +313,16 @@ else
   echo "./dev.sh Using the already set value for the env variable MIGRATE_ON_STARTUP = $MIGRATE_ON_STARTUP"
 fi
 
-if [[ -z "${SYNC_TEMPLATES_ON_STARTUP:-}" ]]; then
+if [[ -z "${BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION:-}" ]]; then
 if [ "$sync_templates" = true ] ; then
-export SYNC_TEMPLATES_ON_STARTUP="true"
+export BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION="true"
 else
 # Because of the defaults set in the docker-compose file we need to explicitly turn
 # this off as just not setting it will get the default "true" value.
-export SYNC_TEMPLATES_ON_STARTUP="false"
+export BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION="false"
 fi
 else
-  echo "./dev.sh Using the already set value for the env variable SYNC_TEMPLATES_ON_STARTUP = $SYNC_TEMPLATES_ON_STARTUP"
+  echo "./dev.sh Using the already set value for the env variable BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION = $BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION"
 fi
 
 # Enable buildkit for faster builds with better caching.
@@ -328,8 +338,8 @@ if [[ "$dev" = true ]]; then
   export WEB_FRONTEND_SSL_PORT=4443
 
   export BASEROW_PUBLIC_URL=
-  export PUBLIC_BACKEND_URL=http://localhost:8000
-  export PUBLIC_WEB_FRONTEND_URL=http://localhost:3000
+  export PUBLIC_BACKEND_URL=${PUBLIC_BACKEND_URL:-http://localhost:8000}
+  export PUBLIC_WEB_FRONTEND_URL=${PUBLIC_WEB_FRONTEND_URL:-http://localhost:3000}
 
   export MEDIA_URL=http://localhost:4000/media/
 fi
@@ -342,13 +352,18 @@ echo "./dev.sh running docker-compose commands:
 CORE_FILE=docker-compose.yml
 
 if [ "$local" = true ] ; then
-  OVERRIDE_FILE=(-f docker-compose.local.yml)
+  OVERRIDE_FILE=(-f deploy/local_testing/docker-compose.local.yml)
 else
   OVERRIDE_FILE=(-f docker-compose.dev.yml)
 fi
 
 if [ "$all_in_one" = true ] ; then
   CORE_FILE=deploy/all-in-one/"$CORE_FILE"
+  OVERRIDE_FILE=()
+fi
+
+if [ "$all_in_one_dev" = true ] ; then
+  CORE_FILE=deploy/all-in-one/docker-compose.dev.yml
   OVERRIDE_FILE=()
 fi
 
@@ -403,6 +418,17 @@ if [ "$dont_attach" != true ] && [ "$up" = true ] ; then
 
   if [ "$all_in_one" = true ]; then
     launch_tab_and_attach "baserow_all_in_one" "baserow_all_in_one"
+    launch_tab_and_attach "mailhog" "mailhog"
+  fi
+
+  if [ "$all_in_one_dev" = true ]; then
+    launch_tab_and_attach "baserow_all_in_one_dev" "baserow_all_in_one_dev"
+    launch_tab_and_exec "web frontend lint" \
+            "baserow_all_in_one_dev" \
+            "/bin/bash /baserow.sh web-frontend-cmd lint-fix"
+    launch_tab_and_exec "backend lint" \
+            "baserow_all_in_one_dev" \
+            "/bin/bash /baserow.sh backend-cmd lint-shell"
     launch_tab_and_attach "mailhog" "mailhog"
   fi
 

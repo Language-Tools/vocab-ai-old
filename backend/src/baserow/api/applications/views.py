@@ -1,7 +1,9 @@
 from django.db import transaction
 from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,8 +12,17 @@ from baserow.api.applications.errors import (
     ERROR_APPLICATION_NOT_IN_GROUP,
 )
 from baserow.api.decorators import validate_body, map_exceptions
-from baserow.api.errors import ERROR_USER_NOT_IN_GROUP, ERROR_GROUP_DOES_NOT_EXIST
-from baserow.api.schemas import get_error_schema, CLIENT_SESSION_ID_SCHEMA_PARAMETER
+from baserow.api.errors import (
+    ERROR_USER_NOT_IN_GROUP,
+    ERROR_GROUP_DOES_NOT_EXIST,
+)
+from baserow.api.jobs.errors import ERROR_MAX_JOB_COUNT_EXCEEDED
+from baserow.api.jobs.serializers import JobSerializer
+from baserow.api.schemas import (
+    get_error_schema,
+    CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+    CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
+)
 from baserow.api.utils import DiscriminatorMappingSerializer
 from baserow.api.trash.errors import ERROR_CANNOT_DELETE_ALREADY_DELETED_ITEM
 from baserow.core.exceptions import (
@@ -20,7 +31,12 @@ from baserow.core.exceptions import (
     ApplicationDoesNotExist,
     ApplicationNotInGroup,
 )
+from baserow.core.db import specific_iterator
 from baserow.core.handler import CoreHandler
+from baserow.core.job_types import DuplicateApplicationJobType
+from baserow.core.jobs.exceptions import MaxJobCountExceeded
+from baserow.core.jobs.handler import JobHandler
+from baserow.core.jobs.registries import job_type_registry
 from baserow.core.models import Application
 from baserow.core.registries import application_type_registry
 from baserow.core.trash.exceptions import CannotDeleteAlreadyDeletedItem
@@ -74,9 +90,11 @@ class AllApplicationsView(APIView):
         returned.
         """
 
-        applications = Application.objects.select_related(
-            "content_type", "group"
-        ).filter(group__users__in=[request.user], group__trashed=False)
+        applications = specific_iterator(
+            Application.objects.select_related("content_type", "group").filter(
+                group__users__in=[request.user], group__trashed=False
+            )
+        )
 
         data = [
             get_application_serializer(application).data for application in applications
@@ -155,6 +173,7 @@ class ApplicationsView(APIView):
                 "provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Applications"],
         operation_id="create_application",
@@ -233,8 +252,8 @@ class ApplicationView(APIView):
     def get(self, request, application_id):
         """Selects a single application and responds with a serialized version."""
 
-        application = CoreHandler().get_application(application_id)
-        application.group.has_user(request.user, raise_error=True)
+        application = CoreHandler().get_user_application(request.user, application_id)
+
         return Response(get_application_serializer(application).data)
 
     @extend_schema(
@@ -246,6 +265,7 @@ class ApplicationView(APIView):
                 description="Updates the application related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Applications"],
         operation_id="update_application",
@@ -278,7 +298,8 @@ class ApplicationView(APIView):
         """Updates the application if the user belongs to the group."""
 
         application = CoreHandler().get_application(
-            application_id, base_queryset=Application.objects.select_for_update()
+            application_id,
+            base_queryset=Application.objects.select_for_update(of=("self",)),
         )
 
         application = action_type_registry.get_by_type(UpdateApplicationActionType).do(
@@ -296,6 +317,7 @@ class ApplicationView(APIView):
                 description="Deletes the application related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Applications"],
         operation_id="delete_application",
@@ -325,7 +347,8 @@ class ApplicationView(APIView):
         """Deletes an existing application if the user belongs to the group."""
 
         application = CoreHandler().get_application(
-            application_id, base_queryset=Application.objects.select_for_update()
+            application_id,
+            base_queryset=Application.objects.select_for_update(of=("self",)),
         )
 
         action_type_registry.get_by_type(DeleteApplicationActionType).do(
@@ -348,6 +371,7 @@ class OrderApplicationsView(APIView):
                 "related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Applications"],
         operation_id="order_applications",
@@ -383,3 +407,60 @@ class OrderApplicationsView(APIView):
             request.user, group, data["application_ids"]
         )
         return Response(status=204)
+
+
+class AsyncDuplicateApplicationView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="application_id",
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.INT,
+                description="The id of the application to duplicate.",
+            ),
+            CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
+        ],
+        tags=["Applications"],
+        operation_id="async_duplicate_application",
+        description=(
+            "Duplicate an application if the authorized user is in the application's "
+            "group. All the related children are also going to be duplicated. For example "
+            "in case of a database application all the underlying tables, fields, "
+            "views and rows are going to be duplicated."
+        ),
+        responses={
+            202: DuplicateApplicationJobType().get_serializer_class(),
+            400: get_error_schema(
+                [
+                    "ERROR_USER_NOT_IN_GROUP",
+                    "ERROR_APPLICATION_NOT_IN_GROUP",
+                    "ERROR_MAX_JOB_COUNT_EXCEEDED",
+                ]
+            ),
+            404: get_error_schema(["ERROR_APPLICATION_DOES_NOT_EXIST"]),
+        },
+    )
+    @transaction.atomic
+    @map_exceptions(
+        {
+            ApplicationDoesNotExist: ERROR_APPLICATION_DOES_NOT_EXIST,
+            UserNotInGroup: ERROR_USER_NOT_IN_GROUP,
+            MaxJobCountExceeded: ERROR_MAX_JOB_COUNT_EXCEEDED,
+        }
+    )
+    def post(self, request: Request, application_id: int) -> Response:
+        """
+        Duplicates an existing application if the user belongs to the group.
+        """
+
+        job = JobHandler().create_and_start_job(
+            request.user,
+            DuplicateApplicationJobType.type,
+            application_id=application_id,
+        )
+
+        serializer = job_type_registry.get_serializer(job, JobSerializer)
+        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)

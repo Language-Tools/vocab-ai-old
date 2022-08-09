@@ -69,6 +69,11 @@
               </nuxt-link>
             </div>
           </li>
+          <component
+            :is="component"
+            v-for="(component, index) in sidebarMainMenuComponents"
+            :key="index"
+          ></component>
           <li class="tree__item">
             <div class="tree__action sidebar__action">
               <a class="tree__link" @click="$refs.trashModal.show()">
@@ -223,13 +228,13 @@
         </ul>
       </div>
       <div class="sidebar__foot sidebar__foot--with-undo-redo">
-        <div class="sidebar__logo">
+        <a class="sidebar__logo" href="https://baserow.io" target="_blank">
           <img
             height="14"
             src="@baserow/modules/core/static/img/logo.svg"
             alt="Baserow logo"
           />
-        </div>
+        </a>
         <div class="sidebar__foot-links">
           <a
             class="sidebar__foot-link"
@@ -317,6 +322,11 @@ export default {
     sidebarTopComponents() {
       return Object.values(this.$registry.getAll('plugin'))
         .map((plugin) => plugin.getSidebarTopComponent())
+        .filter((component) => component !== null)
+    },
+    sidebarMainMenuComponents() {
+      return Object.values(this.$registry.getAll('plugin'))
+        .map((plugin) => plugin.getSidebarMainMenuComponent())
         .filter((component) => component !== null)
     },
     /**

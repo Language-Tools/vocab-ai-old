@@ -14,6 +14,7 @@ from baserow.contrib.database.views.actions import (
     CreateViewActionType,
     DeleteViewActionType,
     OrderViewsActionType,
+    DuplicateViewActionType,
     UpdateViewActionType,
     CreateViewFilterActionType,
     DeleteViewFilterActionType,
@@ -47,11 +48,16 @@ from baserow.api.utils import (
     DiscriminatorCustomFieldsMappingSerializer,
     CustomFieldRegistryMappingSerializer,
 )
-from baserow.api.schemas import CLIENT_SESSION_ID_SCHEMA_PARAMETER, get_error_schema
+from baserow.api.schemas import (
+    CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+    CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
+    get_error_schema,
+)
 from baserow.api.serializers import get_example_pagination_serializer_class
 from baserow.api.pagination import PageNumberPagination
 from baserow.core.action.registries import action_type_registry
 from baserow.core.exceptions import UserNotInGroup
+from baserow.core.db import specific_iterator
 from baserow.contrib.database.api.fields.serializers import LinkRowValueSerializer
 from baserow.contrib.database.api.fields.errors import (
     ERROR_FIELD_NOT_IN_TABLE,
@@ -94,6 +100,7 @@ from baserow.contrib.database.views.exceptions import (
     ViewDecorationNotSupported,
     NoAuthorizationToPubliclySharedView,
 )
+from baserow.contrib.database.api.views.serializers import PublicViewInfoSerializer
 
 from .serializers import (
     ViewSerializer,
@@ -218,7 +225,7 @@ class ViewsView(APIView):
         table.database.group.has_user(
             request.user, raise_error=True, allow_if_template=True
         )
-        views = View.objects.filter(table=table).select_related("content_type")
+        views = View.objects.filter(table=table).select_related("content_type", "table")
 
         if filters:
             views = views.prefetch_related("viewfilter_set")
@@ -228,6 +235,8 @@ class ViewsView(APIView):
 
         if decorations:
             views = views.prefetch_related("viewdecoration_set")
+
+        views = specific_iterator(views)
 
         data = [
             view_type_registry.get_serializer(
@@ -264,6 +273,7 @@ class ViewsView(APIView):
                 ),
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="create_database_table_view",
@@ -408,6 +418,7 @@ class ViewView(APIView):
                 ),
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="update_database_table_view",
@@ -484,6 +495,7 @@ class ViewView(APIView):
                 description="Deletes the view related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="delete_database_table_view",
@@ -516,6 +528,71 @@ class ViewView(APIView):
         return Response(status=204)
 
 
+class DuplicateViewView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="view_id",
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.INT,
+                description="Duplicates the view related to the provided value.",
+            ),
+            CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
+        ],
+        tags=["Database table views"],
+        operation_id="duplicate_database_table_view",
+        description=(
+            "Duplicates an existing view if the user has access to it. "
+            "When a view is duplicated everthing is copied except:"
+            "\n- The name is appended with the copy number. "
+            "Ex: `View Name` -> `View Name (2)` and `View (2)` -> `View (3)`"
+            "\n- If the original view is publicly shared, the new view will not be"
+            " shared anymore"
+        ),
+        responses={
+            200: DiscriminatorCustomFieldsMappingSerializer(
+                view_type_registry, ViewSerializer
+            ),
+            400: get_error_schema(
+                [
+                    "ERROR_USER_NOT_IN_GROUP",
+                ]
+            ),
+            404: get_error_schema(["ERROR_VIEW_DOES_NOT_EXIST"]),
+        },
+    )
+    @transaction.atomic
+    @map_exceptions(
+        {
+            ViewDoesNotExist: ERROR_VIEW_DOES_NOT_EXIST,
+            UserNotInGroup: ERROR_USER_NOT_IN_GROUP,
+        }
+    )
+    def post(self, request, view_id):
+        """Duplicates a view."""
+
+        view = ViewHandler().get_view(view_id).specific
+
+        view_type = view_type_registry.get_by_model(view)
+
+        with view_type.map_api_exceptions():
+            duplicate_view = action_type_registry.get_by_type(
+                DuplicateViewActionType
+            ).do(user=request.user, original_view=view)
+
+        serializer = view_type_registry.get_serializer(
+            duplicate_view,
+            ViewSerializer,
+            filters=True,
+            sortings=True,
+            decorations=True,
+        )
+        return Response(serializer.data)
+
+
 class OrderViewsView(APIView):
     permission_classes = (IsAuthenticated,)
 
@@ -529,6 +606,7 @@ class OrderViewsView(APIView):
                 "the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="order_database_table_views",
@@ -621,6 +699,7 @@ class ViewFiltersView(APIView):
                 "value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view filters"],
         operation_id="create_database_table_view_filter",
@@ -723,6 +802,7 @@ class ViewFilterView(APIView):
                 description="Updates the view filter related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view filters"],
         operation_id="update_database_table_view_filter",
@@ -761,7 +841,7 @@ class ViewFilterView(APIView):
         view_filter = handler.get_filter(
             request.user,
             view_filter_id,
-            base_queryset=ViewFilter.objects.select_for_update(),
+            base_queryset=ViewFilter.objects.select_for_update(of=("self",)),
         )
 
         if "field" in data:
@@ -792,6 +872,7 @@ class ViewFilterView(APIView):
                 description="Deletes the filter related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view filters"],
         operation_id="delete_database_table_view_filter",
@@ -882,6 +963,7 @@ class ViewDecorationsView(APIView):
                 "value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view decorations"],
         operation_id="create_database_table_view_decoration",
@@ -992,6 +1074,7 @@ class ViewDecorationView(APIView):
                 description="Updates the view decoration related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view decorations"],
         operation_id="update_database_table_view_decoration",
@@ -1024,7 +1107,7 @@ class ViewDecorationView(APIView):
         handler = ViewHandler()
         view_decoration = handler.get_decoration(
             view_decoration_id,
-            base_queryset=ViewDecoration.objects.select_for_update(),
+            base_queryset=ViewDecoration.objects.select_for_update(of=("self",)),
         )
 
         group = view_decoration.view.table.database.group
@@ -1077,6 +1160,7 @@ class ViewDecorationView(APIView):
                 description="Deletes the decoration related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view decorations"],
         operation_id="delete_database_table_view_decoration",
@@ -1087,7 +1171,7 @@ class ViewDecorationView(APIView):
         responses={
             204: None,
             400: get_error_schema(["ERROR_USER_NOT_IN_GROUP"]),
-            404: get_error_schema(["ERROR_VIEW_decoration_DOES_NOT_EXIST"]),
+            404: get_error_schema(["ERROR_VIEW_DECORATION_DOES_NOT_EXIST"]),
         },
     )
     @transaction.atomic
@@ -1167,6 +1251,7 @@ class ViewSortingsView(APIView):
                 "value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view sortings"],
         operation_id="create_database_table_view_sort",
@@ -1265,6 +1350,7 @@ class ViewSortView(APIView):
                 description="Updates the view sort related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view sortings"],
         operation_id="update_database_table_view_sort",
@@ -1303,7 +1389,7 @@ class ViewSortView(APIView):
         view_sort = handler.get_sort(
             request.user,
             view_sort_id,
-            base_queryset=ViewSort.objects.select_for_update(),
+            base_queryset=ViewSort.objects.select_for_update(of=("self",)),
         )
 
         if "field" in data:
@@ -1330,6 +1416,7 @@ class ViewSortView(APIView):
                 description="Deletes the sort related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table view sortings"],
         operation_id="delete_database_table_view_sort",
@@ -1425,6 +1512,7 @@ class ViewFieldOptionsView(APIView):
                 description="Updates the field options related to the provided value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="update_database_table_view_field_options",
@@ -1450,6 +1538,7 @@ class ViewFieldOptionsView(APIView):
             ViewDoesNotExist: ERROR_VIEW_DOES_NOT_EXIST,
             UnrelatedFieldError: ERROR_UNRELATED_FIELD,
             ViewDoesNotSupportFieldOptions: ERROR_VIEW_DOES_NOT_SUPPORT_FIELD_OPTIONS,
+            FieldNotInTable: ERROR_FIELD_NOT_IN_TABLE,
         }
     )
     def patch(self, request: Request, view_id: int) -> Response:
@@ -1458,9 +1547,7 @@ class ViewFieldOptionsView(APIView):
         handler = ViewHandler()
         view = handler.get_view(view_id).specific
         view_type = view_type_registry.get_by_model(view)
-        serializer_class = view_type.get_field_options_serializer_class(
-            create_if_missing=True
-        )
+        serializer_class = view_type.get_field_options_serializer_class()
         data = validate_data(serializer_class, request.data)
 
         with view_type.map_api_exceptions():
@@ -1488,6 +1575,7 @@ class RotateViewSlugView(APIView):
                 "value.",
             ),
             CLIENT_SESSION_ID_SCHEMA_PARAMETER,
+            CLIENT_UNDO_REDO_ACTION_GROUP_ID_SCHEMA_PARAMETER,
         ],
         tags=["Database table views"],
         operation_id="rotate_database_view_slug",
@@ -1697,3 +1785,67 @@ class PublicViewAuthView(APIView):
         access_token = handler.encode_public_view_token(view)
         serializer = PublicViewAuthResponseSerializer({"access_token": access_token})
         return Response(serializer.data)
+
+
+class PublicViewInfoView(APIView):
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="slug",
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                required=True,
+                description="The slug of the view to get public information " "about.",
+            )
+        ],
+        tags=["Database table view"],
+        operation_id="get_public_view_info",
+        description=(
+            "Returns the required public information to display a single "
+            "shared view."
+        ),
+        request=None,
+        responses={
+            200: PublicViewInfoSerializer,
+            400: get_error_schema(["ERROR_USER_NOT_IN_GROUP"]),
+            401: get_error_schema(["ERROR_NO_AUTHORIZATION_TO_PUBLICLY_SHARED_VIEW"]),
+            404: get_error_schema(["ERROR_VIEW_DOES_NOT_EXIST"]),
+        },
+    )
+    @map_exceptions(
+        {
+            UserNotInGroup: ERROR_USER_NOT_IN_GROUP,
+            ViewDoesNotExist: ERROR_VIEW_DOES_NOT_EXIST,
+            NoAuthorizationToPubliclySharedView: ERROR_NO_AUTHORIZATION_TO_PUBLICLY_SHARED_VIEW,
+        }
+    )
+    @transaction.atomic
+    def get(self, request: Request, slug: str) -> Response:
+
+        handler = ViewHandler()
+        view = handler.get_public_view_by_slug(
+            request.user,
+            slug,
+            authorization_token=get_public_view_authorization_token(request),
+        )
+        view_specific = view.specific
+        view_type = view_type_registry.get_by_model(view_specific)
+
+        if not view_type.has_public_info:
+            raise ViewDoesNotExist()
+
+        field_options = view_type.get_visible_field_options_in_order(view_specific)
+        fields = specific_iterator(
+            Field.objects.filter(id__in=field_options.values_list("field_id"))
+            .select_related("content_type")
+            .prefetch_related("select_options")
+        )
+
+        return Response(
+            PublicViewInfoSerializer(
+                view=view,
+                fields=fields,
+            ).data
+        )

@@ -25,7 +25,9 @@
         "search": "Chercher",
         "copy": "Copier",
         "activate": "Activer",
-        "deactivate": "Désactiver"
+        "deactivate": "Désactiver",
+        "paste": "Coller",
+        "duplicate": "Dupliquer"
     },
     "adminType": {
         "settings": "Paramètres"
@@ -38,7 +40,8 @@
     "settingType": {
         "account": "Informations personnelles",
         "password": "Mot de passe",
-        "tokens": "Jetons d'API"
+        "tokens": "Jetons d'API",
+        "deleteAccount": "Supprimer le compte"
     },
     "userFileUploadType": {
         "file": "de mon appareil",
@@ -72,7 +75,7 @@
         "lastModified": "Dernière modification",
         "createdOn": "Date de création",
         "url": "URL",
-        "email": "Email",
+        "email": "Courriel",
         "file": "Fichier",
         "singleSelect": "Liste déroulante",
         "multipleSelect": "Selection multiple",
@@ -85,7 +88,7 @@
         "maxDigits": "{max} chiffres sont autorisés.",
         "invalidUrl": "URL invalide",
         "max254Chars": "254 caractères maximum",
-        "invalidEmail": "Adresse email invalide",
+        "invalidEmail": "Adresse électronique invalide",
         "invalidPhoneNumber": "Num. téléphone invalide"
     },
     "fieldDocs": {
@@ -106,7 +109,7 @@
         "lastModifiedReadOnly": "La date de modification de la ligne, en lecture seule.",
         "createdOnReadOnly": "La date de modification de la ligne, en lecture seule.",
         "url": "Accepte une URL valide.",
-        "email": "Accepte une adresse email valide.",
+        "email": "Accepte une adresse électronique valide.",
         "file": "Accepte un tableau d'objet contenant au moins le nom du fichier utilisateur.",
         "singleSelect": "Accepte un entier correspondant à l'identifiant de l'option sélectionnée ou nul si vide.",
         "multipleSelect": "Accepte un tableau d'entier correspondant chacun à l'identifiant d'une valeur sélectionnée.",
@@ -136,7 +139,10 @@
         "lowerThan": "est plus petit que",
         "lengthIsLowerThan": "a une longueur inférieure à",
         "hasFileType": "est de type",
-        "isDaysAgo": "il y a X jours"
+        "isDaysAgo": "il y a X jours",
+        "isMonthsAgo": "il y a X mois",
+        "isYearsAgo": "il y a X ans",
+        "inThisWeek": "cette semaine"
     },
     "viewType": {
         "grid": "Tableau",
@@ -156,7 +162,8 @@
         "table": "table",
         "field": "champ",
         "row": "ligne",
-        "view": "vue"
+        "view": "vue",
+        "rows": "Lignes"
     },
     "webhook": {
         "request": "Requête",
@@ -170,7 +177,10 @@
         "eventType": {
             "rowCreated": "Création d'une ligne",
             "rowUpdated": "Modification d'une ligne",
-            "rowDeleted": "Suppression d'une ligne"
+            "rowDeleted": "Suppression d'une ligne",
+            "rowsCreated": "Des lignes sont créées",
+            "rowsUpdated": "Des lignes sont mises à jour",
+            "rowsDeleted": "Des lignes sont supprimées"
         }
     },
     "clientHandler": {
@@ -207,9 +217,29 @@
         "cannotRestoreParentBeforeChildTitle": "Veuillez restaurer l'élément parent d'abord.",
         "cannotRestoreParentBeforeChildDescription": "Vous ne pouvez pas restaurer cet élément car il dépend d'un autre élément supprimé. Vous devez restaurer l'élément parent avant de pouvoir restaurer cet élément.",
         "groupUserIsLastAdminTitle": "Impossible de quitter le groupe",
-        "groupUserIsLastAdminDescription": "Il est impossible de quitter ce groupe car vous en êtes le dernier administrateur. Veuillez supprimer le groupe ou donner les droits d'administration à un autre utilisateur.",
+        "groupUserIsLastAdminDescription": "Il n'est pas possible de quitter le groupe parce que vous êtes le dernier administrateur ou parce que les comptes des autres administrateurs sont en attente de suppression. Veuillez supprimer le groupe ou donner à un autre utilisateur les droits d'administration.",
         "cannotRestoreAsRelatedTableTrashedTitle": "Veuillez d'abord restaurer les tables liées.",
-        "cannotRestoreAsRelatedTableTrashedDescription": "Vous ne pouvez pas restaurer ce champ car il dépend d'autres tables qui sont toujours dans la corbeille. Veuillez d'abord restaurer les tables liées."
+        "cannotRestoreAsRelatedTableTrashedDescription": "Vous ne pouvez pas restaurer ce champ car il dépend d'autres tables qui sont toujours dans la corbeille. Veuillez d'abord restaurer les tables liées.",
+        "failedToUndoRedoDueToConflictTitle": "Impossible d’annuler/rétablir",
+        "failedToLockFieldDueToConflictTitle": "Impossible de modifier le champ",
+        "errorMaxJobCountExceededTitle": "Impossible de démarrer l'action.",
+        "failedToLockTableDueToConflictDescription": "Une autre opération est en train de mettre à jour ou d'utiliser cette table, veuillez attendre qu'elle se termine avant de réessayer.",
+        "errorMaxJobCountExceededDescription": "Vous ne pouvez plus démarrer ce type d'action car d’autres sont encore en cours d’exécution en arrière-plan. Veuillez réessayer une fois les actions précédentes terminées.",
+        "failedToLockFieldDueToConflictDescription": "Une autre opération est en train de mettre à jour ou d'utiliser ce champ, veuillez attendre qu'elle se termine avant de réessayer.",
+        "failedToUndoRedoDueToConflictDescription": "Une autre opération est en cours d'exécution et bloque votre annulation ou votre rétablissement, veuillez attendre qu'elle se termine avant de réessayer.",
+        "failedToLockTableDueToConflictTitle": "Impossible de créer le champ",
+        "maximumSnapshotsReachedTitle": "Limite du nombre de sauvegarde atteinte",
+        "snapshotBeingCreatedDescription": "Il n'est pas possible de créer plusieurs sauvegardes en même temps.",
+        "snapshotNameNotUniqueDescription": "Tous les noms de sauvegardes doivent être uniques par application.",
+        "snapshotOperationLimitExceededTitle": "Limite atteinte",
+        "snapshotOperationLimitExceededDescription": "Vous avez atteint la limite du nombre d'opérations de sauvegardes en cours. Veuillez attendre la fin de l'opération précédente.",
+        "snapshotBeingRestoredDescription": "Il n'est pas possible d'utiliser les sauvegardes qui sont en cours de restauration.",
+        "snapshotBeingDeletedTitle": "La sauvegarde est en cours de suppression",
+        "snapshotBeingDeletedDescription": "Il n'est pas possible d'utiliser les sauvegardes qui sont en cours de suppression.",
+        "snapshotNameNotUniqueTitle": "Le nom de la sauvegarde doit être unique.",
+        "snapshotBeingCreatedTitle": "Une sauvegarde est déjà en cours de création",
+        "snapshotBeingRestoredTitle": "La sauvegarde est en cours de restauration",
+        "maximumSnapshotsReachedDescription": "Le nombre maximum de sauvegardes d'un groupe a été atteint."
     },
     "importerType": {
         "csv": "Importer un fichier CSV",
@@ -234,7 +264,12 @@
         "queryParameters": "Paramètres de requête",
         "pathParameters": "Paramètres d'URL",
         "requestBodySchema": "Schéma du corps de la requête",
-        "userFieldNamesDescription": "Quand une valeur est définie pour le paramètre GET `user_field_names`, les noms de champs retournés par ce point d'accès seront les noms définis par l'utilisateur.\n\nSi le paramètre `user_field_names` n'est pas fourni, alors le nom des champs sera `field_` suivi par l'identifiant du champ. Par example `field_1` fait référence au champ avec l'identifiant `1`."
+        "userFieldNamesDescription": "Quand une valeur est définie pour le paramètre GET `user_field_names`, les noms de champs retournés par ce point d'accès seront les noms définis par l'utilisateur.\n\nSi le paramètre `user_field_names` n'est pas fourni, alors le nom des champs sera `field_` suivi par l'identifiant du champ. Par example `field_1` fait référence au champ avec l'identifiant `1`.",
+        "createRows": "Créer des rangées",
+        "updateRows": "Mettre à jour les rangées",
+        "deleteRows": "Supprimer des rangées",
+        "singleRow": "Simple",
+        "batchRows": "Lot"
     },
     "exporterType": {
         "csv": "Exporter vers CSV"
@@ -308,9 +343,15 @@
         "varianceSampleDescription": "Calcule la variance des valeurs en argument et retourne le résultat. Cette fonction peut être utilisée quand les arguments fournis contiennent une valeur uniquement pour un sous ensemble de la population.",
         "avgDescription": "Calcule la moyenne de toutes les valeurs et retourne le résultat.",
         "sumDescription": "Retourne la somme de toutes les valeurs en argument et retourne le résultat.",
-        "filterDescription": "Filtre une expression impliquant un champ rapporté,un champ lien vers une table ou un appel de la fonction lookup."
+        "filterDescription": "Filtre une expression impliquant un champ rapporté,un champ lien vers une table ou un appel de la fonction lookup.",
+        "roundDescription": "Renvoie le premier argument arrondi au nombre de chiffres spécifié par le second argument.",
+        "intDescription": "Renvoie uniquement le premier argument converti en un nombre entier en tronquant les décimales éventuelles."
     },
     "functionnalGridViewFieldLinkRow": {
         "unnamed": "Ligne sans nom {value}"
+    },
+    "urlCheck": {
+        "invalidUrlEnvVarTitle": "{name} invalide",
+        "invalidUrlEnvVarDescription": "La variable d'environnement {name} a été définie sur une valeur invalide. L'administrateur de votre site doit changer {name} en une URL valide commençant par http:// ou https:// et ensuite redémarrer Baserow pour corriger cette erreur."
     }
 }

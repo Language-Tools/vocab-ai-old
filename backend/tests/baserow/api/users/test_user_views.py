@@ -4,6 +4,7 @@ from unittest.mock import patch
 from freezegun import freeze_time
 from rest_framework.status import (
     HTTP_200_OK,
+    HTTP_204_NO_CONTENT,
     HTTP_201_CREATED,
     HTTP_400_BAD_REQUEST,
     HTTP_404_NOT_FOUND,
@@ -438,6 +439,17 @@ def test_send_reset_password_email(data_fixture, client, mailoutbox):
     assert "test@localhost.nl" in email.to
     assert email.body.index("http://localhost:3000")
 
+    user = data_fixture.create_user(is_staff=True)
+    CoreHandler().update_settings(user, allow_reset_password=False)
+
+    response = client.post(
+        reverse("api:user:send_reset_password_email"),
+        {"email": " teST@locAlhost.nl ", "base_url": "http://localhost:3000"},
+        format="json",
+    )
+
+    assert response.status_code == HTTP_400_BAD_REQUEST
+
 
 @pytest.mark.django_db
 def test_password_reset(data_fixture, client):
@@ -551,6 +563,17 @@ def test_password_reset(data_fixture, client):
 
     user.refresh_from_db()
     assert not user.check_password(long_password)
+
+    user = data_fixture.create_user(is_staff=True)
+    CoreHandler().update_settings(user, allow_reset_password=False)
+
+    response = client.post(
+        reverse("api:user:reset_password"),
+        {"token": token, "password": long_password},
+        format="json",
+    )
+
+    assert response.status_code == HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db
@@ -712,3 +735,60 @@ def test_additional_user_data(api_client, data_fixture):
         response_json = response.json()
         assert response.status_code == HTTP_201_CREATED
         assert response_json["tmp"] is True
+
+
+@pytest.mark.django_db
+def test_schedule_user_deletion(client, data_fixture):
+    valid_password = "aValidPassword"
+    invalid_password = "invalidPassword"
+    user, token = data_fixture.create_user_and_token(
+        email="test@localhost", password=valid_password, is_staff=True
+    )
+    response = client.post(
+        reverse("api:user:schedule_account_deletion"),
+        {},
+        format="json",
+        HTTP_AUTHORIZATION=f"JWT {token}",
+    )
+
+    response_json = response.json()
+    assert response.status_code == HTTP_400_BAD_REQUEST
+    assert response_json["error"] == "ERROR_REQUEST_BODY_VALIDATION"
+    assert response_json["detail"] == {
+        "password": [{"error": "This field is required.", "code": "required"}]
+    }
+
+    response = client.post(
+        reverse("api:user:schedule_account_deletion"),
+        {"password": invalid_password},
+        format="json",
+        HTTP_AUTHORIZATION=f"JWT {token}",
+    )
+
+    response_json = response.json()
+    assert response.status_code == HTTP_400_BAD_REQUEST
+    assert response_json["error"] == "ERROR_INVALID_PASSWORD"
+
+    response = client.post(
+        reverse("api:user:schedule_account_deletion"),
+        {"password": valid_password},
+        format="json",
+        HTTP_AUTHORIZATION=f"JWT {token}",
+    )
+    response_json = response.json()
+    assert response.status_code == HTTP_400_BAD_REQUEST
+    assert response_json["error"] == "ERROR_USER_IS_LAST_ADMIN"
+
+    # Creates a new staff user
+    data_fixture.create_user(email="test2@localhost", is_staff=True)
+
+    response = client.post(
+        reverse("api:user:schedule_account_deletion"),
+        {"password": valid_password},
+        format="json",
+        HTTP_AUTHORIZATION=f"JWT {token}",
+    )
+    assert response.status_code == HTTP_204_NO_CONTENT
+
+    user.refresh_from_db()
+    assert user.profile.to_be_deleted is True

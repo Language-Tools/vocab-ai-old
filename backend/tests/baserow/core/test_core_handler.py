@@ -268,6 +268,7 @@ def test_leave_group(send_mock, data_fixture):
     user_2 = data_fixture.create_user()
     user_3 = data_fixture.create_user()
     user_4 = data_fixture.create_user()
+    user_5 = data_fixture.create_user(to_be_deleted=True)
     group_1 = data_fixture.create_group()
     group_2 = data_fixture.create_group()
     data_fixture.create_user_group(user=user_1, group=group_1, permissions="ADMIN")
@@ -275,6 +276,8 @@ def test_leave_group(send_mock, data_fixture):
         user=user_2, group=group_1, permissions="ADMIN"
     )
     data_fixture.create_user_group(user=user_3, group=group_1, permissions="USER")
+    # Add a pending deletion user
+    data_fixture.create_user_group(user=user_5, group=group_1, permissions="ADMIN")
     data_fixture.create_user_group(user=user_3, group=group_2, permissions="USER")
     data_fixture.create_user_group(user=user_4, group=group_2, permissions="USER")
 
@@ -943,7 +946,7 @@ def test_get_template(data_fixture):
         )
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_export_import_group_application(data_fixture):
     group = data_fixture.create_group()
     imported_group = data_fixture.create_group()
@@ -967,6 +970,10 @@ def test_export_import_group_application(data_fixture):
 
 
 @pytest.mark.django_db
+@pytest.mark.once_per_day_in_ci
+# You must add --run-once-per-day-in-ci to pytest's additional args to run this test,
+# you can do this in intellij by editing the run config for this test and adding
+# --run-once-per-day-in-ci to the additional args.
 def test_sync_and_install_all_templates(data_fixture, tmpdir):
     storage = FileSystemStorage(location=str(tmpdir), base_url="http://localhost")
     handler = CoreHandler()

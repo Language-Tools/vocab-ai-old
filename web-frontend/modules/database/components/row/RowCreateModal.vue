@@ -1,22 +1,46 @@
 <template>
   <Modal ref="modal">
     <form @submit.prevent="create">
-      <h2 v-if="primary !== undefined" class="box__title">
+      <h2 class="box__title">
         {{ heading }}
       </h2>
       <Error :error="error"></Error>
-      <RowEditModalField
-        v-for="field in allFields"
-        :key="'row-create-field-' + field.id"
-        :ref="'field-' + field.id"
-        :field="field"
+      <RowEditModalFieldsList
+        :primary-is-sortable="primaryIsSortable"
+        :fields="visibleFields"
+        :sortable="true"
+        :hidden="false"
+        :read-only="false"
         :row="row"
         :table="table"
-        :read-only="false"
-        @update="update"
         @field-updated="$emit('field-updated', $event)"
         @field-deleted="$emit('field-deleted')"
-      ></RowEditModalField>
+        @order-fields="$emit('order-fields', $event)"
+        @toggle-field-visibility="$emit('toggle-field-visibility', $event)"
+        @update="update"
+      ></RowEditModalFieldsList>
+      <RowEditModalHiddenFieldsSection
+        v-if="hiddenFields.length"
+        :show-hidden-fields="showHiddenFields"
+        @toggle-hidden-fields-visibility="
+          $emit('toggle-hidden-fields-visibility')
+        "
+      >
+        <RowEditModalFieldsList
+          :primary-is-sortable="primaryIsSortable"
+          :fields="hiddenFields"
+          :sortable="false"
+          :hidden="true"
+          :read-only="false"
+          :row="row"
+          :table="table"
+          @field-updated="$emit('field-updated', $event)"
+          @field-deleted="$emit('field-deleted')"
+          @toggle-field-visibility="$emit('toggle-field-visibility', $event)"
+          @update="update"
+        >
+        </RowEditModalFieldsList>
+      </RowEditModalHiddenFieldsSection>
       <div class="actions">
         <div class="align-right">
           <button
@@ -36,12 +60,15 @@
 import Vue from 'vue'
 import modal from '@baserow/modules/core/mixins/modal'
 import error from '@baserow/modules/core/mixins/error'
-import RowEditModalField from '@baserow/modules/database/components/row/RowEditModalField'
+import RowEditModalFieldsList from './RowEditModalFieldsList.vue'
+import RowEditModalHiddenFieldsSection from './RowEditModalHiddenFieldsSection.vue'
+import { getPrimaryOrFirstField } from '@baserow/modules/database/utils/field'
 
 export default {
   name: 'RowCreateModal',
   components: {
-    RowEditModalField,
+    RowEditModalFieldsList,
+    RowEditModalHiddenFieldsSection,
   },
   mixins: [modal, error],
   props: {
@@ -49,14 +76,24 @@ export default {
       type: Object,
       required: true,
     },
-    primary: {
-      type: Object,
+    primaryIsSortable: {
+      type: Boolean,
       required: false,
-      default: undefined,
+      default: false,
     },
-    fields: {
+    visibleFields: {
       type: Array,
       required: true,
+    },
+    hiddenFields: {
+      type: Array,
+      required: false,
+      default: () => [],
+    },
+    showHiddenFields: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   data() {
@@ -67,17 +104,20 @@ export default {
   },
   computed: {
     allFields() {
-      return [this.primary]
-        .concat(this.fields)
-        .slice()
-        .sort((a, b) => a.order - b.order)
+      return this.visibleFields.concat(this.hiddenFields)
     },
     heading() {
-      const name = `field_${this.primary.id}`
+      const field = getPrimaryOrFirstField(this.visibleFields)
+
+      if (!field) {
+        return null
+      }
+
+      const name = `field_${field.id}`
       if (Object.prototype.hasOwnProperty.call(this.row, name)) {
         return this.$registry
-          .get('field', this.primary.type)
-          .toHumanReadableString(this.primary, this.row[name])
+          .get('field', field.type)
+          .toHumanReadableString(field, this.row[name])
       } else {
         return null
       }

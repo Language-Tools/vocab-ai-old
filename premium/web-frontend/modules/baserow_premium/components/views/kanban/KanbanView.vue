@@ -4,7 +4,6 @@
       :table="table"
       :view="view"
       :fields="fields"
-      :primary="primary"
       :read-only="readOnly"
       :store-prefix="storePrefix"
       :include-field-options-on-refresh="true"
@@ -24,11 +23,11 @@
   >
     <div class="kanban-view__stacks">
       <KanbanViewStack
+        :database="database"
         :table="table"
         :view="view"
         :card-fields="cardFields"
         :fields="fields"
-        :primary="primary"
         :read-only="readOnly"
         :store-prefix="storePrefix"
         @create-row="openCreateRowModal"
@@ -39,11 +38,11 @@
         v-for="option in existingSelectOption"
         :key="option.id"
         :option="option"
+        :database="database"
         :table="table"
         :view="view"
         :card-fields="cardFields"
         :fields="fields"
-        :primary="primary"
         :read-only="readOnly"
         :store-prefix="storePrefix"
         @create-row="openCreateRowModal"
@@ -61,30 +60,47 @@
       <KanbanViewCreateStackContext
         ref="addOptionContext"
         :fields="fields"
-        :primary="primary"
         :store-prefix="storePrefix"
       ></KanbanViewCreateStackContext>
     </div>
     <RowCreateModal
       ref="rowCreateModal"
       :table="table"
-      :fields="fields"
-      :primary="primary"
+      :primary-is-sortable="true"
+      :visible-fields="cardFields"
+      :hidden-fields="hiddenFields"
+      :show-hidden-fields="showHiddenFieldsInRowModal"
+      @toggle-hidden-fields-visibility="
+        showHiddenFieldsInRowModal = !showHiddenFieldsInRowModal
+      "
       @created="createRow"
+      @order-fields="orderFields"
+      @toggle-field-visibility="toggleFieldVisibility"
       @field-updated="$emit('refresh', $event)"
       @field-deleted="$emit('refresh')"
     ></RowCreateModal>
     <RowEditModal
       ref="rowEditModal"
+      :database="database"
       :table="table"
-      :fields="fields"
-      :primary="primary"
+      :primary-is-sortable="true"
+      :visible-fields="cardFields"
+      :hidden-fields="hiddenFields"
       :rows="allRows"
       :read-only="false"
+      :show-hidden-fields="showHiddenFieldsInRowModal"
+      @toggle-hidden-fields-visibility="
+        showHiddenFieldsInRowModal = !showHiddenFieldsInRowModal
+      "
       @update="updateValue"
+      @order-fields="orderFields"
+      @toggle-field-visibility="toggleFieldVisibility"
       @field-updated="$emit('refresh', $event)"
       @field-deleted="$emit('refresh')"
-      @field-created="fieldCreated"
+      @field-created="
+        fieldCreated($event)
+        showHiddenFieldsInRowModal = true
+      "
     ></RowEditModal>
   </div>
 </template>
@@ -94,7 +110,11 @@ import { mapGetters } from 'vuex'
 import { clone } from '@baserow/modules/core/utils/object'
 import { notifyIf } from '@baserow/modules/core/utils/error'
 import viewHelpers from '@baserow/modules/database/mixins/viewHelpers'
-import { maxPossibleOrderValue } from '@baserow/modules/database/viewTypes'
+import {
+  sortFieldsByOrderAndIdFunction,
+  filterVisibleFieldsFunction,
+  filterHiddenFieldsFunction,
+} from '@baserow/modules/database/utils/view'
 import RowCreateModal from '@baserow/modules/database/components/row/RowCreateModal'
 import RowEditModal from '@baserow/modules/database/components/row/RowEditModal'
 import kanbanViewHelper from '@baserow_premium/mixins/kanbanViewHelper'
@@ -129,10 +149,6 @@ export default {
       type: Array,
       required: true,
     },
-    primary: {
-      type: Object,
-      required: true,
-    },
     readOnly: {
       type: Boolean,
       required: true,
@@ -141,6 +157,7 @@ export default {
   data() {
     return {
       row: {},
+      showHiddenFieldsInRowModal: false,
     }
   },
   computed: {
@@ -148,46 +165,23 @@ export default {
      * Returns the visible field objects in the right order.
      */
     cardFields() {
-      return [this.primary]
-        .concat(this.fields)
-        .filter((field) => {
-          const exists = Object.prototype.hasOwnProperty.call(
-            this.fieldOptions,
-            field.id
-          )
-          return !exists || (exists && !this.fieldOptions[field.id].hidden)
-        })
-        .sort((a, b) => {
-          const orderA = this.fieldOptions[a.id]
-            ? this.fieldOptions[a.id].order
-            : maxPossibleOrderValue
-          const orderB = this.fieldOptions[b.id]
-            ? this.fieldOptions[b.id].order
-            : maxPossibleOrderValue
-
-          // First by order.
-          if (orderA > orderB) {
-            return 1
-          } else if (orderA < orderB) {
-            return -1
-          }
-
-          // Then by id.
-          if (a.id < b.id) {
-            return -1
-          } else if (a.id > b.id) {
-            return 1
-          } else {
-            return 0
-          }
-        })
+      const fieldOptions = this.fieldOptions
+      return this.fields
+        .filter(filterVisibleFieldsFunction(fieldOptions))
+        .sort(sortFieldsByOrderAndIdFunction(fieldOptions))
+    },
+    hiddenFields() {
+      const fieldOptions = this.fieldOptions
+      return this.fields
+        .filter(filterHiddenFieldsFunction(fieldOptions))
+        .sort(sortFieldsByOrderAndIdFunction(fieldOptions))
     },
     /**
      * Returns the single select field object that the kanban view uses to group the
      * cards in stacks.
      */
     singleSelectField() {
-      const allFields = [this.primary].concat(this.fields)
+      const allFields = this.fields
       for (let i = 0; i < allFields.length; i++) {
         if (allFields[i].id === this.singleSelectFieldId) {
           return allFields[i]
@@ -233,7 +227,6 @@ export default {
             view: this.view,
             table: this.table,
             fields: this.fields,
-            primary: this.primary,
             values: row,
           }
         )
@@ -250,7 +243,6 @@ export default {
             table: this.table,
             view: this.view,
             fields: this.fields,
-            primary: this.primary,
             row,
             field,
             value,

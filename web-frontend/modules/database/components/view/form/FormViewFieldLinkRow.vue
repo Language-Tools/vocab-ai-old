@@ -3,8 +3,10 @@
     <PaginatedDropdown
       :fetch-page="fetchPage"
       :value="dropdownValue"
+      :initial-display-name="initialDisplayName"
       :class="{ 'dropdown--error': touched && !valid }"
       :fetch-on-open="lazyLoad"
+      :disabled="readOnly"
       @input="updateValue($event)"
       @hide="touch()"
     ></PaginatedDropdown>
@@ -45,6 +47,9 @@ export default {
     dropdownValue() {
       return this.value.length === 0 ? null : this.value[0].id
     },
+    initialDisplayName() {
+      return this.value.length === 0 ? null : this.value[0].value
+    },
   },
   methods: {
     fetchPage(page, search) {
@@ -55,8 +60,8 @@ export default {
         search
       )
     },
-    updateValue(value) {
-      this.$emit('update', value === null ? [] : [{ id: value }], this.value)
+    updateValue({ id, value }) {
+      this.$emit('update', value === null ? [] : [{ id, value }], this.value)
     },
   },
 }

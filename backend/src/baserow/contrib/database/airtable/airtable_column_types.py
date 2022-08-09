@@ -1,3 +1,6 @@
+import logging
+import traceback
+
 from datetime import datetime
 from decimal import Decimal
 from pytz import UTC, timezone as pytz_timezone
@@ -27,6 +30,9 @@ from baserow.contrib.database.fields.models import (
 
 from .helpers import import_airtable_date_type_options, set_select_options_on_field
 from .registry import AirtableColumnType
+
+
+logger = logging.getLogger(__name__)
 
 
 class TextAirtableColumnType(AirtableColumnType):
@@ -183,11 +189,19 @@ class DateAirtableColumnType(AirtableColumnType):
         # doesn't support different timezones for the date field, we need to convert
         # to the given timezone because then it will be visible in the correct
         # timezone to the user.
-        value = (
-            datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
-            .astimezone(timezone)
-            .replace(tzinfo=UTC)
-        )
+        try:
+            value = (
+                datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+                .astimezone(timezone)
+                .replace(tzinfo=UTC)
+            )
+        except ValueError:
+            tb = traceback.format_exc()
+            print(f"Importing Airtable datetime cell failed failed because of: \n{tb}")
+            logger.error(
+                f"Importing Airtable datetime cell failed failed because of: \n{tb}"
+            )
+            return None
 
         if baserow_field.date_include_time:
             return f"{value.isoformat()}"
@@ -253,14 +267,10 @@ class ForeignKeyAirtableColumnType(AirtableColumnType):
         type_options = raw_airtable_column.get("typeOptions", {})
         foreign_table_id = type_options.get("foreignTableId")
 
-        # Only return a link row field if the foreign table id is not the same as the
-        # current table id because we're not supported link_row fields that point to
-        # the same table.
-        if raw_airtable_table["id"] != foreign_table_id:
-            return LinkRowField(
-                link_row_table_id=foreign_table_id,
-                link_row_related_field_id=type_options.get("symmetricColumnId"),
-            )
+        return LinkRowField(
+            link_row_table_id=foreign_table_id,
+            link_row_related_field_id=type_options.get("symmetricColumnId"),
+        )
 
     def to_baserow_export_serialized_value(
         self,

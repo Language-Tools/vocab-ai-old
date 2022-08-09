@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from zipfile import ZipFile
 
 from django.core.files.storage import Storage
@@ -29,6 +29,7 @@ class KanbanViewType(ViewType):
     field_options_model_class = KanbanViewFieldOptions
     field_options_serializer_class = KanbanViewFieldOptionsSerializer
     allowed_fields = ["single_select_field", "card_cover_image_field"]
+    field_options_allowed_fields = ["hidden", "order"]
     serializer_field_names = ["single_select_field", "card_cover_image_field"]
     serializer_field_overrides = {
         "single_select_field": PrimaryKeyRelatedField(
@@ -52,6 +53,9 @@ class KanbanViewType(ViewType):
         ),
         FieldNotInTable: ERROR_FIELD_NOT_IN_TABLE,
     }
+    can_decorate = True
+    # TODO: When we make kanban views publicly sharable flip this to True
+    when_shared_publicly_requires_realtime_events = False
 
     def get_api_urls(self):
         from baserow_premium.api.views.kanban import urls as api_urls
@@ -96,13 +100,22 @@ class KanbanViewType(ViewType):
 
         return values
 
-    def export_serialized(self, kanban, files_zip, storage):
+    def export_serialized(
+        self,
+        kanban: View,
+        files_zip: Optional[ZipFile] = None,
+        storage: Optional[Storage] = None,
+    ):
         """
         Adds the serialized kanban view options to the exported dict.
         """
 
         serialized = super().export_serialized(kanban, files_zip, storage)
-        serialized["single_select_field_id"] = kanban.single_select_field_id
+        if kanban.single_select_field_id:
+            serialized["single_select_field_id"] = kanban.single_select_field_id
+
+        if kanban.card_cover_image_field_id:
+            serialized["card_cover_image_field_id"] = kanban.card_cover_image_field_id
 
         serialized_field_options = []
         for field_option in kanban.get_field_options():
@@ -123,17 +136,24 @@ class KanbanViewType(ViewType):
         table: Table,
         serialized_values: Dict[str, Any],
         id_mapping: Dict[str, Any],
-        files_zip: ZipFile,
-        storage: Storage,
-    ):
+        files_zip: Optional[ZipFile] = None,
+        storage: Optional[Storage] = None,
+    ) -> View:
         """
         Imports the serialized kanban view field options.
         """
 
         serialized_copy = serialized_values.copy()
-        serialized_copy["single_select_field_id"] = id_mapping["database_fields"][
-            serialized_copy.pop("single_select_field_id")
-        ]
+        if "single_select_field_id" in serialized_copy:
+            serialized_copy["single_select_field_id"] = id_mapping["database_fields"][
+                serialized_copy.pop("single_select_field_id")
+            ]
+
+        if "card_cover_image_field_id" in serialized_copy:
+            serialized_copy["card_cover_image_field_id"] = id_mapping[
+                "database_fields"
+            ][serialized_copy.pop("card_cover_image_field_id")]
+
         field_options = serialized_copy.pop("field_options")
         kanban_view = super().import_serialized(
             table, serialized_copy, id_mapping, files_zip, storage

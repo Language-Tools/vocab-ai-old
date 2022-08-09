@@ -9,6 +9,7 @@ from typing import (
     List,
     Iterable,
     Tuple,
+    Set,
 )
 from zipfile import ZipFile
 
@@ -18,6 +19,7 @@ from django.db import models as django_models
 from rest_framework.fields import CharField
 from rest_framework.serializers import Serializer
 
+from baserow.contrib.database.fields.field_filters import OptionallyAnnotatedQ
 from baserow.core.registry import (
     Instance,
     Registry,
@@ -30,8 +32,6 @@ from baserow.core.registry import (
     ImportExportMixin,
     MapAPIExceptionsInstanceMixin,
 )
-from baserow.contrib.database.fields.field_filters import OptionallyAnnotatedQ
-
 from .exceptions import (
     ViewTypeAlreadyRegistered,
     ViewTypeDoesNotExist,
@@ -44,7 +44,6 @@ from .exceptions import (
     DecoratorTypeDoesNotExist,
     DecoratorTypeAlreadyRegistered,
 )
-
 
 if TYPE_CHECKING:
     from baserow.contrib.database.fields.models import Field
@@ -123,6 +122,12 @@ class ViewType(
     Indicates if the view supports being shared via a public link.
     """
 
+    has_public_info = False
+    """
+    Indicates if the view supports public information being returned by
+    the PublicViewInfoView.
+    """
+
     field_options_model_class = None
     """
     The model class of the through table that contains the field options. The model
@@ -150,6 +155,12 @@ class ViewType(
     and view events will be available to subscribe to and sent to said subscribers.
     """
 
+    field_options_allowed_fields = []
+    """
+    The field names that are allowed to set when creating and updating the field
+    options
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.can_share:
@@ -168,7 +179,10 @@ class ViewType(
             }
 
     def export_serialized(
-        self, view: "View", files_zip: ZipFile, storage: Optional[Storage] = None
+        self,
+        view: "View",
+        files_zip: Optional[ZipFile] = None,
+        storage: Optional[Storage] = None,
     ) -> Dict[str, Any]:
         """
         Exports the view to a serialized dict that can be imported by the
@@ -231,7 +245,7 @@ class ViewType(
         table: "Table",
         serialized_values: Dict[str, Any],
         id_mapping: Dict[str, Any],
-        files_zip: ZipFile,
+        files_zip: Optional[ZipFile] = None,
         storage: Optional[Storage] = None,
     ) -> "View":
         """
@@ -271,33 +285,45 @@ class ViewType(
 
         if self.can_filter:
             for view_filter in filters:
-                view_filter_type = view_filter_type_registry.get(view_filter["type"])
-                view_filter_copy = view_filter.copy()
-                view_filter_id = view_filter_copy.pop("id")
-                view_filter_copy["field_id"] = id_mapping["database_fields"][
-                    view_filter_copy["field_id"]
-                ]
-                view_filter_copy[
-                    "value"
-                ] = view_filter_type.set_import_serialized_value(
-                    view_filter_copy["value"], id_mapping
-                )
-                view_filter_object = ViewFilter.objects.create(
-                    view=view, **view_filter_copy
-                )
-                id_mapping["database_view_filters"][
-                    view_filter_id
-                ] = view_filter_object.id
+                try:
+                    view_filter_type = view_filter_type_registry.get(
+                        view_filter["type"]
+                    )
+                    view_filter_copy = view_filter.copy()
+                    view_filter_id = view_filter_copy.pop("id")
+                    view_filter_copy["field_id"] = id_mapping["database_fields"][
+                        view_filter_copy["field_id"]
+                    ]
+                    view_filter_copy[
+                        "value"
+                    ] = view_filter_type.set_import_serialized_value(
+                        view_filter_copy["value"], id_mapping
+                    )
+                    view_filter_object = ViewFilter.objects.create(
+                        view=view, **view_filter_copy
+                    )
+                    id_mapping["database_view_filters"][
+                        view_filter_id
+                    ] = view_filter_object.id
+                except KeyError:
+                    pass
 
         if self.can_sort:
-            for view_decoration in sortings:
-                view_sort_copy = view_decoration.copy()
-                view_sort_id = view_sort_copy.pop("id")
-                view_sort_copy["field_id"] = id_mapping["database_fields"][
-                    view_sort_copy["field_id"]
-                ]
-                view_sort_object = ViewSort.objects.create(view=view, **view_sort_copy)
-                id_mapping["database_view_sortings"][view_sort_id] = view_sort_object.id
+            for view_sorting in sortings:
+                try:
+                    view_sort_copy = view_sorting.copy()
+                    view_sort_id = view_sort_copy.pop("id")
+                    view_sort_copy["field_id"] = id_mapping["database_fields"][
+                        view_sort_copy["field_id"]
+                    ]
+                    view_sort_object = ViewSort.objects.create(
+                        view=view, **view_sort_copy
+                    )
+                    id_mapping["database_view_sortings"][
+                        view_sort_id
+                    ] = view_sort_object.id
+                except KeyError:
+                    pass
 
         if self.can_decorate:
             for view_decoration in decorations:
@@ -348,7 +374,7 @@ class ViewType(
         return model._field_objects.values(), model
 
     def get_field_options_serializer_class(
-        self, create_if_missing: bool
+        self, create_if_missing: bool = False
     ) -> Type[Serializer]:
         """
         Generates a serializer that has the `field_options` property as a
@@ -390,22 +416,41 @@ class ViewType(
             attrs,
         )
 
-    def before_field_options_update(self, view, field_options, fields):
+    def before_field_options_update(
+        self, view: "View", field_options: Dict[str, Any], fields: List["Field"]
+    ) -> Dict[str, Any]:
         """
         Called before the field options are updated related to the provided view.
 
         :param view: The view for which the field options need to be updated.
-        :type view: View
         :param field_options: A dict with the field ids as the key and a dict
             containing the values that need to be updated as value.
-        :type field_options: dict
         :param fields: Optionally a list of fields can be provided so that they don't
             have to be fetched again.
         :return: The updated field options.
-        :rtype: dict
         """
 
         return field_options
+
+    def after_field_options_update(
+        self,
+        view: "View",
+        field_options: Dict[str, Any],
+        fields: List["Field"],
+        update_field_option_instances: List[Any],
+    ):
+        """
+        Called after the field options have been updated. This hook can be used to
+        update values that haven't been updated.
+
+        :param view: The view for which the field options need to be updated.
+        :param field_options: A dict with the field ids as the key and a dict
+            containing the values that need to be updated as value.
+        :param fields: Optionally a list of fields can be provided so that they don't
+            have to be fetched again.
+        :param update_field_option_instances: The instances of the field options that
+            have been updated.
+        """
 
     def after_field_type_change(self, field: "Field") -> None:
         """
@@ -455,21 +500,6 @@ class ViewType(
         raise NotImplementedError(
             "An exportable or publicly sharable view must implement "
             "`get_visible_field_options_in_order`"
-        )
-
-    def get_hidden_field_options(self, view: "View") -> django_models.QuerySet:
-        """
-        Should return a queryset of all field options which are hidden in the
-        provided view.
-
-        :param view: The view to query.
-        :type view: View
-        :return: A queryset of the views specific view options which are 'hidden'.
-        """
-
-        raise NotImplementedError(
-            "An exportable or publicly sharable view must implement "
-            "`get_hidden_field_options`"
         )
 
     def get_aggregations(
@@ -539,6 +569,41 @@ class ViewType(
 
         return values
 
+    def enhance_field_options_queryset(
+        self, queryset: django_models.QuerySet
+    ) -> django_models.QuerySet:
+        """
+        This hook can be used to enhance the fetch field options queryset. If the
+        field options have a relationship, `select_related` or `prefetch_related` can
+        be applied here to improve performance.
+
+        :param queryset: The queryset that must be enhanced.
+        :return: The enhanced queryset.
+        """
+
+        return queryset
+
+    def get_hidden_fields(
+        self,
+        view: "View",
+        field_ids_to_check: Optional[List[int]] = None,
+    ) -> Set[int]:
+        """
+        Should be implemented to return the set of fields ids which hidden in the
+        provided view of this type. A hidden field as defined by this function will be
+        completely excluded from any publicly shared version of this view.
+
+        :param view: The view to find hidden field ids for.
+        :param field_ids_to_check: An optional list of field ids to restrict the check
+            down to.
+        :return: A set of field ids which are hidden in this view.
+        """
+
+        raise NotImplementedError(
+            "An exportable or publicly sharable view must implement "
+            "`get_hidden_fields`"
+        )
+
 
 class ViewTypeRegistry(
     APIUrlsRegistryMixin, CustomFieldsRegistryMixin, ModelRegistryMixin, Registry
@@ -597,6 +662,7 @@ class ViewFilterType(Instance):
 
     def default_filter_on_exception(self):
         """The default Q to use when the filter value is of an incompatible type."""
+
         return django_models.Q(pk__in=[])
 
     def get_filter(self, field_name, value, model_field, field) -> OptionallyAnnotatedQ:
@@ -851,6 +917,7 @@ class DecoratorValueProviderType(CustomFieldsInstanceMixin, Instance):
             updated when a new instance has been created.
         :return: The new value that will be imported.
         """
+
         return value
 
     def after_field_delete(self, deleted_field: "Field"):

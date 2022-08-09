@@ -403,6 +403,46 @@ def test_airtable_import_datetime_with_different_default_timezone_column(
 
 @pytest.mark.django_db
 @responses.activate
+def test_airtable_import_datetime_edge_case_1(data_fixture, api_client):
+    airtable_field = {
+        "id": "fldEB5dp0mNjVZu0VJI",
+        "name": "Date",
+        "type": "date",
+        "typeOptions": {
+            "isDateTime": True,
+            "dateFormat": "Local",
+            "timeFormat": "24hour",
+            "timeZone": "client",
+        },
+    }
+    (
+        baserow_field,
+        airtable_column_type,
+    ) = airtable_column_type_registry.from_airtable_column_to_serialized(
+        {}, airtable_field, UTC
+    )
+    assert isinstance(baserow_field, DateField)
+    assert isinstance(airtable_column_type, DateAirtableColumnType)
+    assert baserow_field.date_format == "ISO"
+    assert baserow_field.date_include_time is True
+    assert baserow_field.date_time_format == "24"
+
+    amsterdam = timezone("Europe/Amsterdam")
+    assert (
+        airtable_column_type.to_baserow_export_serialized_value(
+            {},
+            airtable_field,
+            baserow_field,
+            "+020222-03-28T00:00:00.000Z",
+            amsterdam,
+            {},
+        )
+        is None
+    )
+
+
+@pytest.mark.django_db
+@responses.activate
 def test_airtable_import_email_column(data_fixture, api_client):
     airtable_field = {
         "id": "fldNdoAZRim39AxR9Eg",
@@ -625,6 +665,7 @@ def test_airtable_import_foreign_key_column(data_fixture, api_client):
         == [1, 2]
     )
 
+    # link to same table row
     airtable_field = {
         "id": "fldQcEaGEe7xuhUEuPL",
         "name": "Link to Users",
@@ -642,8 +683,10 @@ def test_airtable_import_foreign_key_column(data_fixture, api_client):
     ) = airtable_column_type_registry.from_airtable_column_to_serialized(
         {"id": "tblRpq315qnnIcg5IjI"}, airtable_field, UTC
     )
-    assert baserow_field is None
-    assert airtable_column_type is None
+    assert isinstance(baserow_field, LinkRowField)
+    assert isinstance(airtable_column_type, ForeignKeyAirtableColumnType)
+    assert baserow_field.link_row_table_id == "tblRpq315qnnIcg5IjI"
+    assert baserow_field.link_row_related_field_id == "fldQcEaGEe7xuhUEuPL"
 
 
 @pytest.mark.django_db
@@ -894,7 +937,7 @@ def test_airtable_import_number_decimal_column(data_fixture, api_client):
         "type": "number",
         "typeOptions": {
             "format": "decimal",
-            "precision": 6,
+            "precision": 11,
             "negative": True,
         },
     }
@@ -906,7 +949,7 @@ def test_airtable_import_number_decimal_column(data_fixture, api_client):
     )
     assert isinstance(baserow_field, NumberField)
     assert isinstance(airtable_column_type, NumberAirtableColumnType)
-    assert baserow_field.number_decimal_places == 5
+    assert baserow_field.number_decimal_places == 10
     assert baserow_field.number_negative is True
 
 

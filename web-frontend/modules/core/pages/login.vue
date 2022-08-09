@@ -15,7 +15,7 @@
             {{ $t('action.signUp') }}
           </nuxt-link>
         </li>
-        <li>
+        <li v-if="settings.allow_reset_password">
           <nuxt-link :to="{ name: 'forgot-password' }">
             {{ $t('login.forgotPassword') }}
           </nuxt-link>
@@ -34,8 +34,14 @@ import LangPicker from '@baserow/modules/core/components/LangPicker'
 
 export default {
   components: { AuthLogin, LangPicker },
-  mixins: [groupInvitationToken],
   layout: 'login',
+  async asyncData({ redirect, route, app, store }) {
+    if (store.getters['settings/get'].show_admin_signup_page === true) {
+      redirect('signup')
+    }
+
+    return await groupInvitationToken.asyncData({ route, app })
+  },
   head() {
     return {
       title: this.$t('login.title'),

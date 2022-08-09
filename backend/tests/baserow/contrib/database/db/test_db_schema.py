@@ -17,13 +17,12 @@ from baserow.contrib.database.table.models import Table
 @pytest.mark.django_db
 def test_lenient_schema_editor():
     dummy = DummyDatabaseWrapper({})
-    with pytest.raises(ValueError):
-        with lenient_schema_editor(dummy):
-            pass
+    with lenient_schema_editor():
+        pass
 
     assert connection.SchemaEditorClass == PostgresqlDatabaseSchemaEditor
 
-    with lenient_schema_editor(connection) as schema_editor:
+    with lenient_schema_editor() as schema_editor:
         assert isinstance(schema_editor, PostgresqlLenientDatabaseSchemaEditor)
         assert isinstance(schema_editor, BaseDatabaseSchemaEditor)
         assert schema_editor.alter_column_prepare_old_value == ""
@@ -34,7 +33,6 @@ def test_lenient_schema_editor():
     assert connection.SchemaEditorClass == PostgresqlDatabaseSchemaEditor
 
     with lenient_schema_editor(
-        connection,
         "p_in = REGEXP_REPLACE(p_in, '', 'test', 'g');",
         "p_in = REGEXP_REPLACE(p_in, 'test', '', 'g');",
         True,
@@ -51,9 +49,10 @@ def test_lenient_schema_editor():
 # Test provided as an example of how to trigger the django bug. However disabled from CI
 # as it will break the connection!
 @pytest.mark.django_db
-@pytest.mark.slow
-# You must add --runslow -s to pytest to run this test, you can do this in intellij by
-# editing the run config for this test and adding --runslow -s to additional args.
+@pytest.mark.disabled_in_ci
+# You must add --run-disabled-in-ci -s to pytest to run this test, you can do this in
+# intellij by editing the run config for this test and adding --run-disabled-in-ci -s
+# to additional args.
 def test_showing_how_djangos_schema_editor_is_broken(data_fixture):
     cxn = transaction.get_connection()
     starting_savepoints = list(cxn.savepoint_ids)
@@ -150,7 +149,6 @@ def test_lenient_schema_editor_is_also_safe(data_fixture):
         ProgrammingError, match=f'relation "tbl_order_id_{table.id}_idx" already exists'
     ):
         with lenient_schema_editor(
-            connection,
             None,
             None,
             False,

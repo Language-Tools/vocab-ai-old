@@ -18,12 +18,25 @@
           />
           <a
             class="button button--large button--ghost file-upload__button"
-            @click.prevent="$refs.file.click($event)"
+            :class="{ 'button--loading': state !== null }"
+            :disabled="disabled"
+            @click.prevent="!disabled && $refs.file.click($event)"
           >
             <i class="fas fa-cloud-upload-alt"></i>
             {{ $t('tableCSVImporter.chooseFile') }}
           </a>
-          <div class="file-upload__file">{{ filename }}</div>
+          <div v-if="state === null" class="file-upload__file">
+            {{ filename }}
+          </div>
+          <template v-else>
+            <ProgressBar
+              :value="fileLoadingProgress"
+              :show-value="state === 'loading'"
+              :status="
+                state === 'loading' ? $t('importer.loading') : stateTitle
+              "
+            />
+          </template>
         </div>
         <div v-if="$v.filename.$error" class="error">
           {{ $t('error.requiredField') }}
@@ -37,7 +50,11 @@
             $t('tableCSVImporter.columnSeparator')
           }}</label>
           <div class="control__elements">
-            <Dropdown v-model="columnSeparator" @input="reload()">
+            <Dropdown
+              v-model="columnSeparator"
+              :disabled="isDisabled"
+              @input="reload()"
+            >
               <DropdownItem name="auto detect" value="auto"></DropdownItem>
               <DropdownItem name="," value=","></DropdownItem>
               <DropdownItem name=";" value=";"></DropdownItem>
@@ -63,6 +80,7 @@
           <div class="control__elements">
             <CharsetDropdown
               v-model="encoding"
+              :disabled="isDisabled"
               @input="reload()"
             ></CharsetDropdown>
           </div>
@@ -76,25 +94,24 @@
             $t('tableCSVImporter.firstRowHeader')
           }}</label>
           <div class="control__elements">
-            <Checkbox v-model="values.firstRowHeader" @input="reload()">{{
-              $t('common.yes')
-            }}</Checkbox>
+            <Checkbox
+              v-model="firstRowHeader"
+              :disabled="isDisabled"
+              @input="reloadPreview()"
+              >{{ $t('common.yes') }}</Checkbox
+            >
           </div>
         </div>
       </div>
     </div>
-    <div
+    <Alert
       v-if="error !== ''"
-      class="alert alert--error alert--has-icon margin-top-1"
+      :title="$t('common.wrong')"
+      type="error"
+      icon="exclamation"
     >
-      <div class="alert__icon">
-        <i class="fas fa-exclamation"></i>
-      </div>
-      <div class="alert__title">{{ $t('common.wrong') }}</div>
-      <p class="alert__content">
-        {{ error }}
-      </p>
-    </div>
+      {{ error }}
+    </Alert>
     <TableImporterPreview
       v-if="error === '' && Object.keys(preview).length !== 0"
       :preview="preview"
@@ -116,23 +133,24 @@ export default {
   mixins: [form, importer],
   data() {
     return {
-      values: {
-        data: '',
-        firstRowHeader: true,
-      },
       filename: '',
       columnSeparator: 'auto',
+      firstRowHeader: true,
       encoding: 'utf-8',
-      error: '',
       rawData: null,
-      preview: {},
+      parsedData: null,
     }
   },
   validations: {
     values: {
-      data: { required },
+      getData: { required },
     },
     filename: { required },
+  },
+  computed: {
+    isDisabled() {
+      return this.disabled || this.state !== null
+    },
   },
   methods: {
     /**
@@ -148,21 +166,31 @@ export default {
       }
 
       const file = event.target.files[0]
-      const maxSize = 1024 * 1024 * 15
+      const maxSize =
+        parseInt(this.$env.BASEROW_MAX_IMPORT_FILE_SIZE_MB, 10) * 1024 * 1024
 
       if (file.size > maxSize) {
         this.filename = ''
-        this.values.data = ''
-        this.error = this.$t('tableCSVImporter.limitFileSize', {
-          limit: 15,
-        })
-        this.preview = {}
-        this.$emit('input', this.value)
+        this.handleImporterError(
+          this.$t('tableCSVImporter.limitFileSize', {
+            limit: this.$env.BASEROW_MAX_IMPORT_FILE_SIZE_MB,
+          })
+        )
       } else {
+        this.resetImporterState()
+        this.fileLoadingProgress = 0
+        this.parsedData = null
+
+        this.$emit('changed')
         this.filename = file.name
+        this.state = 'loading'
         const reader = new FileReader()
+        reader.addEventListener('progress', (event) => {
+          this.fileLoadingProgress = (event.loaded / event.total) * 100
+        })
         reader.addEventListener('load', (event) => {
           this.rawData = event.target.result
+          this.fileLoadingProgress = 100
           this.reload()
         })
         reader.readAsArrayBuffer(event.target.files[0])
@@ -174,50 +202,88 @@ export default {
      * Also a small preview will be generated. If something goes wrong, for example
      * when the CSV doesn't have any entries the appropriate error will be shown.
      */
-    reload() {
+    async reload() {
+      this.resetImporterState()
+      this.state = 'parsing'
+      await this.$ensureRender()
+
       const decoder = new TextDecoder(this.encoding)
       const decodedData = decoder.decode(this.rawData)
       const limit = this.$env.INITIAL_TABLE_DATA_LIMIT
       const count = decodedData.split(/\r\n|\r|\n/).length
+
       if (limit !== null && count > limit) {
-        this.values.data = ''
-        this.error = this.$t('tableCSVImporter.limitError', {
-          limit,
-        })
-        this.preview = {}
+        this.handleImporterError(
+          this.$t('tableCSVImporter.limitError', {
+            limit,
+          })
+        )
         return
       }
 
+      // Prepare a callback function to be called when the form is submitted.
+      // This is where the rest of the parsing takes place.
+      // This was added to avoid the UI freezing while uploading large files.
+      const getData = () => {
+        return new Promise((resolve, reject) => {
+          this.$ensureRender().then(() => {
+            this.$papa.parse(decodedData, {
+              skipEmptyLines: true,
+              delimiter:
+                this.columnSeparator === 'auto' ? '' : this.columnSeparator,
+              complete: (parsedResult) => {
+                if (this.firstRowHeader) {
+                  const [, ...data] = parsedResult.data
+                  resolve(data)
+                } else {
+                  resolve(parsedResult.data)
+                }
+              },
+              error(error) {
+                reject(error)
+              },
+            })
+          })
+        })
+      }
+
+      await this.$ensureRender()
+      // Parse only the first 4 rows to show a preview. (header + 3 rows)
       this.$papa.parse(decodedData, {
+        preview: 6,
+        skipEmptyLines: true,
         delimiter: this.columnSeparator === 'auto' ? '' : this.columnSeparator,
-        complete: (data) => {
-          if (data.data.length === 0) {
+        complete: (parsedResult) => {
+          if (parsedResult.data.length === 0) {
             // We need at least a single entry otherwise the user has probably chosen
             // a wrong file.
-            this.values.data = ''
-            this.error = this.$t('tableCSVImporter.emptyCSV')
-            this.preview = {}
+            this.handleImporterError(this.$t('tableCSVImporter.emptyCSV'))
           } else {
-            // If parsed successfully and it is not empty then the initial data can be
-            // prepared for creating the table. We store the data stringified because
-            // it doesn't need to be reactive.
-            const dataWithHeader = this.ensureHeaderExistsAndIsValid(
-              data.data,
-              this.values.firstRowHeader
-            )
-            this.values.data = JSON.stringify(dataWithHeader)
-            this.error = ''
-            this.preview = this.getPreview(dataWithHeader)
+            // Store the data to reload the preview without reparsing.
+            this.parsedData = [...parsedResult.data]
+            this.reloadPreview()
+            this.state = null
+            this.values.getData = getData
           }
         },
         error(error) {
           // Papa parse has resulted in an error which we need to display to the user.
-          // All previously loaded data will be removed.
-          this.values.data = ''
-          this.error = error.errors[0].message
-          this.preview = {}
+          this.handleImporterError(error.errors[0].message)
         },
       })
+    },
+    /**
+     * Reload the preview without re-parsing the raw data.
+     */
+    reloadPreview() {
+      if (this.firstRowHeader) {
+        const [header, ...data] = this.parsedData
+        this.values.header = this.prepareHeader(header, data)
+        this.preview = this.getPreview(this.values.header, data)
+      } else {
+        this.values.header = this.prepareHeader([], this.parsedData)
+        this.preview = this.getPreview(this.values.header, this.parsedData)
+      }
     },
   },
 }

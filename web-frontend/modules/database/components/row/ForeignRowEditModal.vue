@@ -2,10 +2,10 @@
   <RowEditModal
     ref="modal"
     :read-only="true"
+    :database="database"
     :table="table"
     :rows="[]"
-    :fields="fields"
-    :primary="primary"
+    :visible-fields="fields"
     @hidden="$emit('hidden', $event)"
   ></RowEditModal>
 </template>
@@ -36,8 +36,27 @@ export default {
       fetchedTableAndFields: false,
       table: {},
       fields: [],
-      primary: {},
     }
+  },
+  computed: {
+    database() {
+      const databaseType = DatabaseApplicationType.getType()
+      for (const application of this.$store.getters['application/getAll']) {
+        if (application.type !== databaseType) {
+          continue
+        }
+
+        const foundTable = application.tables.find(
+          ({ id }) => id === this.tableId
+        )
+
+        if (foundTable) {
+          return application
+        }
+      }
+
+      return undefined
+    },
   },
   methods: {
     async fetchTableAndFields() {
@@ -67,9 +86,6 @@ export default {
       fieldData.forEach((part, index) => {
         populateField(fieldData[index], this.$registry)
       })
-      const primaryIndex = fieldData.findIndex((item) => item.primary === true)
-      this.primary =
-        primaryIndex !== -1 ? fieldData.splice(primaryIndex, 1)[0] : null
       this.fields = fieldData
 
       // Mark the table and fields as fetched, so that we don't have to do that a

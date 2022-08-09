@@ -2,7 +2,6 @@ from typing import List
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import update_last_login
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -13,8 +12,9 @@ from baserow.api.mixins import UnknownFieldRaisesExceptionSerializerMixin
 from baserow.api.user.validators import password_validation, language_validation
 from baserow.core.action.models import Action
 from baserow.core.action.registries import action_scope_registry, ActionScopeStr
-from baserow.core.models import Template, UserLogEntry
+from baserow.core.models import Template
 from baserow.core.user.utils import normalize_email_address
+from baserow.core.user.handler import UserHandler
 
 User = get_user_model()
 
@@ -32,7 +32,14 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "username", "password", "is_staff", "id", "language")
+        fields = (
+            "first_name",
+            "username",
+            "password",
+            "is_staff",
+            "id",
+            "language",
+        )
         extra_kwargs = {
             "password": {"write_only": True},
             "is_staff": {"read_only": True},
@@ -123,31 +130,28 @@ class UndoRedoResultCodeField(serializers.Field):
     SKIPPED_DUE_TO_ERROR = "SKIPPED_DUE_TO_ERROR"
 
     def __init__(self, *args, **kwargs):
-        kwargs[
-            "help_text"
-        ] = f"Indicates the result of the undo/redo operation. Will be "
-        f"'{self.SUCCESS}' on success, '{self.NOTHING_TO_DO}' when "
-        f"there is no action to undo/redo and "
-        f"'{self.SKIPPED_DUE_TO_ERROR}' when the undo/redo failed due "
-        f"to a conflict or error and was skipped over."
+        kwargs["help_text"] = (
+            "Indicates the result of the undo/redo operation. Will be "
+            f"'{self.SUCCESS}' on success, '{self.NOTHING_TO_DO}' when "
+            "there is no action to undo/redo and "
+            f"'{self.SKIPPED_DUE_TO_ERROR}' when the undo/redo failed due "
+            "to a conflict or error and was skipped over."
+        )
         super().__init__(*args, **kwargs)
 
     def get_attribute(self, instance):
-        return instance
+        return instance["actions"]
 
-    def get_initial(self):
-        return self.NOTHING_TO_DO
-
-    def to_representation(self, instance):
-        if instance.has_error():
+    def to_representation(self, actions):
+        if not actions:
+            return self.NOTHING_TO_DO
+        if actions[0].has_error():
             return self.SKIPPED_DUE_TO_ERROR
         else:
             return self.SUCCESS
 
 
-class UndoRedoResponseSerializer(serializers.ModelSerializer):
-
-    result_code = UndoRedoResultCodeField()
+class UndoRedoActionSerializer(serializers.ModelSerializer):
 
     action_type = serializers.CharField(
         required=False,
@@ -168,21 +172,14 @@ class UndoRedoResponseSerializer(serializers.ModelSerializer):
         "will contain the scope of the action that was undone/redone.",
     )
 
-    @extend_schema_field(OpenApiTypes.STR)
-    def get_result_code(self, instance):
-        if instance is None:
-            return self.NOTHING_TO_DO
-        elif instance.error:
-            return self.SKIPPED_DUE_TO_ERROR
-        else:
-            return self.SUCCESS
-
-    def to_representation(self, instance):
-        return super().to_representation(instance)
-
     class Meta:
         model = Action
-        fields = ("action_type", "action_scope", "result_code")
+        fields = ("action_type", "action_scope")
+
+
+class UndoRedoResponseSerializer(serializers.Serializer):
+    actions = UndoRedoActionSerializer(many=True)
+    result_code = UndoRedoResultCodeField()
 
 
 class AccountSerializer(serializers.Serializer):
@@ -223,6 +220,10 @@ class ChangePasswordBodyValidationSerializer(serializers.Serializer):
     new_password = serializers.CharField(validators=[password_validation])
 
 
+class DeleteUserBodyValidationSerializer(serializers.Serializer):
+    password = serializers.CharField()
+
+
 class NormalizedEmailField(serializers.EmailField):
     def to_internal_value(self, data):
         data = super().to_internal_value(data)
@@ -250,14 +251,8 @@ class NormalizedEmailWebTokenSerializer(JSONWebTokenSerializer):
             msg = "User account is disabled."
             raise serializers.ValidationError(msg)
 
-        update_last_login(None, user)
-        UserLogEntry.objects.create(actor=user, action="SIGNED_IN")
-        # Call the user_signed_in method for each plugin that is un the registry to
-        # notify all plugins that a user has signed in.
-        from baserow.core.registries import plugin_registry
+        UserHandler().user_signed_in(user)
 
-        for plugin in plugin_registry.registry.values():
-            plugin.user_signed_in(user)
         return validated_data
 
 

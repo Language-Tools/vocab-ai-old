@@ -23,20 +23,19 @@
         $t('tablePasteImporter.firstRowHeader')
       }}</label>
       <div class="control__elements">
-        <Checkbox v-model="values.firstRowHeader" @input="reload()">{{
+        <Checkbox v-model="firstRowHeader" @input="reload()">{{
           $t('common.yes')
         }}</Checkbox>
       </div>
     </div>
-    <div v-if="error !== ''" class="alert alert--error alert--has-icon">
-      <div class="alert__icon">
-        <i class="fas fa-exclamation"></i>
-      </div>
-      <div class="alert__title">{{ $t('common.wrong') }}</div>
-      <p class="alert__content">
-        {{ error }}
-      </p>
-    </div>
+    <Alert
+      v-if="error !== ''"
+      type="error"
+      icon="exclamation"
+      :title="$t('common.wrong')"
+    >
+      {{ error }}
+    </Alert>
     <TableImporterPreview
       v-if="error === '' && content !== '' && Object.keys(preview).length !== 0"
       :preview="preview"
@@ -57,69 +56,72 @@ export default {
   mixins: [form, importer],
   data() {
     return {
-      values: {
-        data: '',
-        firstRowHeader: true,
-      },
       content: '',
-      error: '',
-      preview: {},
+      firstRowHeader: true,
     }
   },
   validations: {
     values: {
-      data: { required },
+      getData: { required },
     },
     content: { required },
   },
   methods: {
     changed(content) {
+      this.$emit('changed')
+      this.resetImporterState()
+
       this.content = content
       this.reload()
     },
-    reload() {
+    async reload() {
       if (this.content === '') {
-        this.values.data = ''
-        this.error = ''
-        this.preview = {}
-        this.$emit('input', this.value)
+        this.resetImporterState()
         return
       }
 
       const limit = this.$env.INITIAL_TABLE_DATA_LIMIT
       const count = this.content.split(/\r\n|\r|\n/).length
       if (limit !== null && count > limit) {
-        this.values.data = ''
-        this.error = this.$t('tablePasteImporter.limitError', {
-          limit,
-        })
-        this.preview = {}
-        this.$emit('input', this.value)
+        this.handleImporterError(
+          this.$t('tablePasteImporter.limitError', {
+            limit,
+          })
+        )
         return
       }
-
+      this.state = 'parsing'
+      await this.$ensureRender()
       this.$papa.parse(this.content, {
         delimiter: '\t',
-        complete: (data) => {
+        complete: (parsedResult) => {
           // If parsed successfully and it is not empty then the initial data can be
           // prepared for creating the table. We store the data stringified because it
           // doesn't need to be reactive.
-          const dataWithHeader = this.ensureHeaderExistsAndIsValid(
-            data.data,
-            this.values.firstRowHeader
-          )
-          this.values.data = JSON.stringify(dataWithHeader)
+          let data
+
+          if (this.firstRowHeader) {
+            const [header, ...rest] = parsedResult.data
+            data = rest
+            this.values.header = this.prepareHeader(header, data)
+          } else {
+            data = parsedResult.data
+            this.values.header = this.prepareHeader([], data)
+          }
+
+          this.values.getData = () => {
+            return new Promise((resolve) => {
+              resolve(data)
+            })
+          }
           this.error = ''
-          this.preview = this.getPreview(dataWithHeader)
-          this.$emit('input', this.value)
+          this.state = null
+          this.preview = this.getPreview(this.values.header, data)
         },
         error(error) {
           // Papa parse has resulted in an error which we need to display to the user.
           // All previously loaded data will be removed.
-          this.values.data = ''
-          this.error = error.errors[0].message
-          this.preview = {}
-          this.$emit('input', this.value)
+          this.handleImporterError(error.errors[0].message)
         },
       })
     },

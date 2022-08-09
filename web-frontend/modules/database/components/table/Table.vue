@@ -39,6 +39,7 @@
           <ViewsContext
             v-if="views !== null"
             ref="viewsContext"
+            :database="database"
             :table="table"
             :views="views"
             :read-only="readOnly"
@@ -65,6 +66,7 @@
           </a>
           <ViewContext
             ref="viewContext"
+            :database="database"
             :view="view"
             :table="table"
             @enable-rename="$refs.rename.edit()"
@@ -78,7 +80,6 @@
           <ViewFilter
             :view="view"
             :fields="fields"
-            :primary="primary"
             :read-only="readOnly"
             :disable-filter="disableFilter"
             @changed="refresh()"
@@ -91,7 +92,6 @@
           <ViewSort
             :view="view"
             :fields="fields"
-            :primary="primary"
             :read-only="readOnly"
             :disable-sort="disableSort"
             @changed="refresh()"
@@ -108,10 +108,10 @@
           class="header__filter-item"
         >
           <ViewDecoratorMenu
+            :database="database"
             :view="view"
             :table="table"
             :fields="fields"
-            :primary="primary"
             :read-only="readOnly"
             :disable-sort="disableSort"
             @changed="refresh()"
@@ -125,7 +125,6 @@
         :table="table"
         :view="view"
         :fields="fields"
-        :primary="primary"
         :read-only="readOnly"
         :store-prefix="storePrefix"
         @refresh="refresh"
@@ -140,7 +139,6 @@
         :table="table"
         :view="view"
         :fields="fields"
-        :primary="primary"
         :read-only="readOnly"
         :store-prefix="storePrefix"
         @refresh="refresh"
@@ -197,10 +195,6 @@ export default {
     },
     fields: {
       type: Array,
-      required: true,
-    },
-    primary: {
-      type: Object,
       required: true,
     },
     views: {
@@ -346,7 +340,6 @@ export default {
           { store: this.$store },
           this.view,
           fieldsToRefresh,
-          this.primary,
           this.storePrefix,
           includeFieldOptions
         )

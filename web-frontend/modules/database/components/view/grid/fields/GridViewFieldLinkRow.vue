@@ -80,7 +80,8 @@ export default {
     this.$options.computed = {
       ...(this.$options.computed || {}),
       ...mapGetters({
-        publicGrid: this.$options.propsData.storePrefix + 'view/grid/isPublic',
+        publicGrid:
+          this.$options.propsData.storePrefix + 'view/public/getIsPublic',
       }),
     }
   },
@@ -89,7 +90,7 @@ export default {
       // While the field is selected we want to open the select row popup by pressing
       // the enter key.
       this.$el.keydownEvent = (event) => {
-        if (event.keyCode === 13 && !this.modalOpen) {
+        if (event.key === 'Enter' && !this.modalOpen) {
           this.showModal()
         }
       }

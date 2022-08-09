@@ -8,6 +8,8 @@ from django.db.models import UniqueConstraint, Q
 from django.contrib.postgres.fields import ArrayField
 
 from rest_framework.exceptions import NotAuthenticated
+from baserow.core.jobs.models import Job
+from baserow.core.jobs.mixins import JobWithUserDataMixin
 
 from baserow.core.user_files.models import UserFile
 
@@ -34,6 +36,7 @@ __all__ = [
     "TrashEntry",
     "UserFile",
     "Action",
+    "Snapshot",
 ]
 
 
@@ -71,6 +74,22 @@ class Settings(models.Model):
         help_text="Indicates whether invited users can create an account when signing "
         "up, even if allow_new_signups is disabled.",
     )
+    allow_reset_password = models.BooleanField(
+        default=True,
+        help_text="Indicates whether users can request a password reset link.",
+    )
+    account_deletion_grace_delay = models.PositiveSmallIntegerField(
+        default=30,
+        help_text=(
+            "Number of days after the last login for an account pending deletion "
+            "to be deleted"
+        ),
+    )
+    show_admin_signup_page = models.BooleanField(
+        default=True,
+        help_text="Indicates that there are no admin users in the database yet, "
+        "so in the frontend the signup form will be shown instead of the login page.",
+    )
 
 
 class UserProfile(models.Model):
@@ -87,16 +106,23 @@ class UserProfile(models.Model):
         help_text="An ISO 639 language code (with optional variant) "
         "selected by the user. Ex: en-GB.",
     )
+    to_be_deleted = models.BooleanField(
+        default=False,
+        help_text="True if the user is pending deletion. "
+        "An automatic task will delete the user after a grace delay.",
+    )
 
 
 class Group(TrashableModelMixin, CreatedAndUpdatedOnMixin):
     name = models.CharField(max_length=160)
     users = models.ManyToManyField(User, through="GroupUser")
+    storage_usage = models.IntegerField(null=True)
 
     def application_set_including_trash(self):
         """
         :return: The applications for this group including any trashed applications.
         """
+
         return self.application_set(manager="objects_and_trash")
 
     def has_template(self):
@@ -249,7 +275,7 @@ class Application(
     PolymorphicContentTypeMixin,
     models.Model,
 ):
-    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=160)
     order = models.PositiveIntegerField()
     content_type = models.ForeignKey(
@@ -393,3 +419,39 @@ class TrashEntry(models.Model):
                 fields=["-trashed_at", "trash_item_type", "group", "application"]
             )
         ]
+
+
+class DuplicateApplicationJob(JobWithUserDataMixin, Job):
+
+    user_data_to_save = ["user_websocket_id"]
+
+    original_application = models.ForeignKey(
+        Application,
+        null=True,
+        related_name="duplicated_by_jobs",
+        on_delete=models.SET_NULL,
+        help_text="The Baserow application to duplicate.",
+    )
+    duplicated_application = models.OneToOneField(
+        Application,
+        null=True,
+        related_name="duplicated_from_jobs",
+        on_delete=models.SET_NULL,
+        help_text="The duplicated Baserow application.",
+    )
+
+
+class Snapshot(models.Model):
+    name = models.CharField(max_length=160)
+    snapshot_from_application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, null=False, related_name="snapshot_to"
+    )
+    snapshot_to_application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, null=True, related_name="snapshot_from"
+    )
+    mark_for_deletion = models.BooleanField(default=False)
+    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("name", "snapshot_from_application")

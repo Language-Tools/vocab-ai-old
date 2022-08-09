@@ -13,6 +13,8 @@ from baserow_premium.admin.users.exceptions import (
 )
 from baserow_premium.license.handler import check_active_premium_license
 
+from baserow.core.signals import before_user_deleted
+
 User = get_user_model()
 
 
@@ -52,7 +54,7 @@ class UserAdminHandler:
         )
 
         try:
-            user = User.objects.select_for_update().get(id=user_id)
+            user = User.objects.select_for_update(of=("self",)).get(id=user_id)
         except User.DoesNotExist:
             raise UserDoesNotExistException()
 
@@ -111,6 +113,9 @@ class UserAdminHandler:
 
         try:
             user = User.objects.get(id=user_id)
+
+            before_user_deleted.send(self, user=user)
+
             user.delete()
         except User.DoesNotExist:
             raise UserDoesNotExistException()

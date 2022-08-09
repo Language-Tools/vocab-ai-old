@@ -22,6 +22,8 @@ EMAIL_USE_TLS = False
 EMAIL_HOST = "mailhog"
 EMAIL_PORT = 1025
 
+BASEROW_MAX_ROW_REPORT_ERROR_COUNT = 10  # To trigger this exception easily
+
 try:
     from .local import *  # noqa: F403, F401
 except ImportError:

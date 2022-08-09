@@ -1,10 +1,10 @@
 import re
 from typing import Dict, Any, Union, Type
 
+from django.conf import settings
 from django.db import models
-from django.db.models import Q, F
+from django.db.models import Q, F, QuerySet
 
-from baserow.contrib.database.fields.dependencies.handler import FieldDependencyHandler
 from baserow.contrib.database.fields.exceptions import (
     OrderByFieldNotFound,
     OrderByFieldNotPossible,
@@ -18,16 +18,19 @@ from baserow.contrib.database.fields.field_filters import (
 from baserow.contrib.database.fields.field_sortings import AnnotatedOrder
 from baserow.contrib.database.fields.registries import field_type_registry
 from baserow.contrib.database.table.cache import (
-    get_latest_cached_model_field_attrs,
+    get_cached_model_field_attrs,
     set_cached_model_field_attrs,
 )
 from baserow.contrib.database.views.exceptions import ViewFilterTypeNotAllowedForField
 from baserow.contrib.database.views.registries import view_filter_type_registry
+from baserow.core.db import specific_iterator
+from baserow.core.jobs.models import Job
 from baserow.core.mixins import (
     OrderableMixin,
     CreatedAndUpdatedOnMixin,
     TrashableModelMixin,
 )
+from baserow.core.jobs.mixins import JobWithUserDataMixin
 from baserow.core.utils import split_comma_separated_string
 
 deconstruct_filter_key_regex = re.compile(r"filter__field_([0-9]+)__([a-zA-Z0-9_]*)$")
@@ -349,6 +352,9 @@ class Table(
     database = models.ForeignKey("database.Database", on_delete=models.CASCADE)
     order = models.PositiveIntegerField()
     name = models.CharField(max_length=255)
+    row_count = models.PositiveIntegerField(null=True)
+    row_count_updated_at = models.DateTimeField(null=True)
+    version = models.TextField(default="initial_version")
 
     class Meta:
         ordering = ("order",)
@@ -475,10 +481,12 @@ class Table(
             and field_ids is None
             and add_dependencies is True
             and attribute_names is False
+            and not settings.BASEROW_DISABLE_MODEL_CACHE
         )
 
         if use_cache:
-            field_attrs = get_latest_cached_model_field_attrs(self.id)
+            self.refresh_from_db(fields=["version"])
+            field_attrs = get_cached_model_field_attrs(self)
         else:
             field_attrs = None
 
@@ -493,7 +501,7 @@ class Table(
             )
 
             if use_cache:
-                set_cached_model_field_attrs(self.id, field_attrs)
+                set_cached_model_field_attrs(self, field_attrs)
 
         attrs.update(**field_attrs)
 
@@ -550,6 +558,7 @@ class Table(
         # trashed columns will be given null values by django triggering not null
         # constraints in the database.
         fields_query = self.field_set(manager="objects_and_trash").all()
+
         # If the field ids are provided we must only fetch the fields of which the
         # ids are in that list.
         if isinstance(field_ids, list):
@@ -557,6 +566,7 @@ class Table(
                 fields_query = []
             else:
                 fields_query = fields_query.filter(pk__in=field_ids)
+
         # If the field names are provided we must only fetch the fields of which the
         # user defined name is in that list.
         if isinstance(field_names, list):
@@ -564,13 +574,19 @@ class Table(
                 fields_query = []
             else:
                 fields_query = fields_query.filter(name__in=field_names)
+
+        if isinstance(fields_query, QuerySet):
+            fields_query = specific_iterator(fields_query)
+
         # Create a combined list of fields that must be added and belong to the this
         # table.
         fields = list(fields) + [field for field in fields_query]
+
         # If there are duplicate field names we have to store them in a list so we
         # know later which ones are duplicate.
         duplicate_field_names = []
         already_included_field_names = set([f.name for f in fields])
+
         # We will have to add each field to with the correct field name and model
         # field to the attribute list in order for the model to work.
         while len(fields) > 0:
@@ -581,6 +597,10 @@ class Table(
             field_name = field.db_column
 
             if filtered and add_dependencies:
+                from baserow.contrib.database.fields.dependencies.handler import (
+                    FieldDependencyHandler,
+                )
+
                 direct_dependencies = (
                     FieldDependencyHandler.get_same_table_dependencies(field)
                 )
@@ -628,6 +648,7 @@ class Table(
                 db_column=field.db_column,
                 verbose_name=field.name,
             )
+
         return field_attrs
 
     # Use our own custom index name as the default models.Index
@@ -635,3 +656,23 @@ class Table(
     # tables.
     def get_collision_safe_order_id_idx_name(self):
         return f"tbl_order_id_{self.id}_idx"
+
+
+class DuplicateTableJob(JobWithUserDataMixin, Job):
+
+    user_data_to_save = ["user_websocket_id"]
+
+    original_table = models.ForeignKey(
+        Table,
+        null=True,
+        related_name="duplicated_by_jobs",
+        on_delete=models.SET_NULL,
+        help_text="The Baserow table to duplicate.",
+    )
+    duplicated_table = models.OneToOneField(
+        Table,
+        null=True,
+        related_name="duplicated_from_jobs",
+        on_delete=models.SET_NULL,
+        help_text="The duplicated Baserow table.",
+    )

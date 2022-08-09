@@ -75,6 +75,23 @@ export default {
     // When the component is mounted we want to forcefully reload the selectedName and
     // selectedIcon.
     this.forceRefreshSelectedValue()
+
+    // The child dropdown item components determine what the possible options are.
+    // Because is not no "Vue way" of watching these components, we're using the
+    // mutation observer to monitor changes. This is needed because we need to
+    // update the select value display value.
+    this.observer = new MutationObserver(() => {
+      this.forceRefreshSelectedValue()
+    })
+    this.observer.observe(this.$refs.items, {
+      attributes: false,
+      childList: true,
+      characterData: false,
+      subtree: false,
+    })
+  },
+  beforeDestroy() {
+    this.observer.disconnect()
   },
   methods: {
     focusout(event) {
@@ -151,7 +168,7 @@ export default {
           this.open &&
           // Check if the user has hit either of the keys we care about. If not,
           // ignore.
-          (event.code === 'ArrowUp' || event.code === 'ArrowDown')
+          (event.key === 'ArrowUp' || event.key === 'ArrowDown')
         ) {
           // Prevent scrolling up and down while pressing the up and down key.
           event.stopPropagation()
@@ -160,14 +177,14 @@ export default {
         }
         // Allow the Enter key to select the value that is currently being hovered
         // over.
-        if (this.open && event.code === 'Enter') {
+        if (this.open && event.key === 'Enter') {
           // Prevent submitting the whole form when pressing the enter key while the
           // dropdown is open.
           event.preventDefault()
           this.select(this.hover)
         }
         // Close on escape
-        if (this.open && event.code === 'Escape') {
+        if (this.open && event.key === 'Escape') {
           this.hide()
         }
       }
@@ -255,7 +272,7 @@ export default {
         (child) => !child.disabled && child.isVisible(this.query)
       )
 
-      const isArrowUp = event.code === 'ArrowUp'
+      const isArrowUp = event.key === 'ArrowUp'
       let index = children.findIndex((item) => item.value === this.hover)
       index = isArrowUp ? index - 1 : index + 1
 

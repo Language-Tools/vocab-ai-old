@@ -89,6 +89,7 @@ import GridViewFieldFormula from '@baserow/modules/database/components/view/grid
 import FieldFormulaSubForm from '@baserow/modules/database/components/field/FieldFormulaSubForm'
 import FieldLookupSubForm from '@baserow/modules/database/components/field/FieldLookupSubForm'
 import RowEditFieldFormula from '@baserow/modules/database/components/row/RowEditFieldFormula'
+import ViewService from '@baserow/modules/database/services/view'
 
 export class FieldType extends Registerable {
   /**
@@ -270,6 +271,7 @@ export class FieldType extends Registerable {
       iconClass: this.iconClass,
       name: this.getName(),
       isReadOnly: this.isReadOnly,
+      canImport: this.getCanImport(),
     }
   }
 
@@ -508,6 +510,34 @@ export class FieldType extends Registerable {
   acceptSplitCommaSeparatedSelectOptions() {
     return false
   }
+
+  /**
+   * Determines whether the field type value can be set by
+   * parsing a query parameter.
+   * @returns {boolean}
+   */
+  canParseQueryParameter() {
+    return false
+  }
+
+  /**
+   * Parse a value given by a url query parameter.
+   * @param {string} value
+   * @param field
+   * @param options Any additional information that might be needed for the parsing
+   * @returns {*}
+   */
+  parseQueryParameter(field, value, options) {
+    return value
+  }
+
+  /**
+   * Determines whether the field type value can be imported from a file
+   * @returns {boolean}
+   */
+  getCanImport() {
+    return false
+  }
 }
 
 export class TextFieldType extends FieldType {
@@ -578,6 +608,14 @@ export class TextFieldType extends FieldType {
   canBeReferencedByFormulaField() {
     return true
   }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  getCanImport() {
+    return true
+  }
 }
 
 export class LongTextFieldType extends FieldType {
@@ -642,6 +680,14 @@ export class LongTextFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -773,6 +819,24 @@ export class LinkRowFieldType extends FieldType {
   shouldFetchFieldSelectOptions() {
     return false
   }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  async parseQueryParameter(field, value, { client, slug }) {
+    const { data } = await ViewService(client).linkRowFieldLookup(
+      slug,
+      field.field.id,
+      1,
+      value,
+      1
+    )
+
+    const item = data.results.find((item) => item.value === value)
+
+    return item ? [item] : this.getEmptyValue()
+  }
 }
 
 export class NumberFieldType extends FieldType {
@@ -854,11 +918,18 @@ export class NumberFieldType extends FieldType {
     if (value === null || value === '') {
       return null
     }
-    if (isNaN(parseFloat(value)) || !isFinite(value)) {
+
+    // Transform any commas to dots
+    const valueWithDots =
+      typeof value === 'string'
+        ? NumberFieldType.unlocalizeString(value)
+        : value
+
+    if (isNaN(parseFloat(valueWithDots)) || !isFinite(valueWithDots)) {
       return this.app.i18n.t('fieldErrors.invalidNumber')
     }
     if (
-      value.split('.')[0].replace('-', '').length >
+      valueWithDots.split('.')[0].replace('-', '').length >
       NumberFieldType.getMaxNumberLength()
     ) {
       return this.app.i18n.t('fieldErrors.maxDigits', {
@@ -891,14 +962,28 @@ export class NumberFieldType extends FieldType {
    * they will be set to 0.
    */
   static formatNumber(field, value) {
-    if (value === '' || isNaN(value) || value === undefined || value === null) {
+    const valueWithDots =
+      typeof value === 'string'
+        ? NumberFieldType.unlocalizeString(value)
+        : value
+
+    if (
+      valueWithDots === '' ||
+      isNaN(valueWithDots) ||
+      valueWithDots === undefined ||
+      valueWithDots === null
+    ) {
       return null
     }
-    let number = new BigNumber(value)
+    let number = new BigNumber(valueWithDots)
     if (!field.number_negative && number.isLessThan(0)) {
       number = 0
     }
     return number.toFixed(field.number_decimal_places)
+  }
+
+  static unlocalizeString(value) {
+    return value.replace(/,/g, '.')
   }
 
   getDocsDataType(field) {
@@ -931,6 +1016,18 @@ export class NumberFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    return NumberFieldType.formatNumber(field.field, value)
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -1009,7 +1106,7 @@ export class RatingFieldType extends FieldType {
     const value = parseInt(pastedValue, 10)
 
     if (isNaN(value) || !isFinite(value)) {
-      return
+      return 0
     }
 
     // Clamp the value
@@ -1039,6 +1136,28 @@ export class RatingFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    const valueParsed = parseInt(value, 10)
+
+    if (isNaN(valueParsed) || valueParsed < 0) {
+      return this.getEmptyValue()
+    }
+
+    if (valueParsed > field.max_value) {
+      return field.max_value
+    }
+
+    return valueParsed
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -1094,6 +1213,9 @@ export class BooleanFieldType extends FieldType {
    * value is true.
    */
   prepareValueForPaste(field, clipboardData) {
+    if (!clipboardData) {
+      clipboardData = ''
+    }
     const value = clipboardData.toLowerCase().trim()
     return trueString.includes(value)
   }
@@ -1111,6 +1233,18 @@ export class BooleanFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    return value === 'true'
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -1186,7 +1320,14 @@ class BaseDateFieldType extends FieldType {
    * correct format for the field. If it can't be parsed null is returned.
    */
   prepareValueForPaste(field, clipboardData) {
-    const value = clipboardData.toUpperCase()
+    if (!clipboardData) {
+      clipboardData = ''
+    }
+    return DateFieldType.formatDate(field, clipboardData)
+  }
+
+  static formatDate(field, dateString) {
+    const value = dateString.toUpperCase()
 
     // Formats for ISO dates
     let formats = [
@@ -1237,6 +1378,10 @@ class BaseDateFieldType extends FieldType {
   canBeReferencedByFormulaField() {
     return true
   }
+
+  getCanImport() {
+    return true
+  }
 }
 
 export class DateFieldType extends BaseDateFieldType {
@@ -1259,6 +1404,14 @@ export class DateFieldType extends BaseDateFieldType {
 
   getRowEditFieldComponent() {
     return RowEditFieldDate
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    return DateFieldType.formatDate(field.field, value)
   }
 }
 
@@ -1451,6 +1604,14 @@ export class URLFieldType extends FieldType {
   getContainsFilterFunction() {
     return genericContainsFilter
   }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  canBeReferencedByFormulaField() {
+    return true
+  }
 }
 
 export class EmailFieldType extends FieldType {
@@ -1533,6 +1694,14 @@ export class EmailFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -1727,7 +1896,7 @@ export class SingleSelectFieldType extends FieldType {
 
   _findOptionWithMatchingId(field, rawTextValue) {
     if (isNumeric(rawTextValue)) {
-      const pastedOptionId = parseInt(rawTextValue)
+      const pastedOptionId = parseInt(rawTextValue, 10)
       return field.select_options.find((option) => option.id === pastedOptionId)
     }
     return undefined
@@ -1742,6 +1911,9 @@ export class SingleSelectFieldType extends FieldType {
 
   prepareValueForPaste(field, clipboardData) {
     const rawTextValue = clipboardData
+    if (!rawTextValue) {
+      return null
+    }
 
     return (
       this._findOptionWithMatchingId(field, rawTextValue) ||
@@ -1802,6 +1974,22 @@ export class SingleSelectFieldType extends FieldType {
 
   shouldFetchFieldSelectOptions() {
     return false
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    const selectedOption = field.field.select_options.find(
+      (option) => option.value === value
+    )
+
+    return selectedOption ?? this.getEmptyValue()
+  }
+
+  getCanImport() {
+    return true
   }
 }
 
@@ -1868,33 +2056,29 @@ export class MultipleSelectFieldType extends FieldType {
   }
 
   prepareValueForCopy(field, value) {
-    let returnValue
     if (value === undefined || value === null) {
-      returnValue = []
+      return ''
     }
-    returnValue = value
-    return JSON.stringify({
-      value: returnValue,
-    })
+
+    const nameList = value.map(({ value }) => value)
+    // Use papa to generate a CSV  string
+    const result = this.app.$papa.unparse([nameList])
+    return result
   }
 
   prepareValueForPaste(field, clipboardData) {
-    let values
     try {
-      values = JSON.parse(clipboardData)
-    } catch (SyntaxError) {
-      return []
-    }
-    // We need to check whether the pasted select_options belong to this field.
-    const pastedIDs = values.value.map((obj) => obj.id)
-    const fieldSelectOptionIDs = field.select_options.map((obj) => obj.id)
-    const pastedIDsBelongToField = pastedIDs.some((id) =>
-      fieldSelectOptionIDs.includes(id)
-    )
+      const values = this.app.$papa.parse(clipboardData)
+      const data = values.data[0]
 
-    if (pastedIDsBelongToField) {
-      return values.value
-    } else {
+      const selectOptionMap = Object.fromEntries(
+        field.select_options.map((option) => [option.value, option])
+      )
+
+      return data
+        .filter((name) => Object.keys(selectOptionMap).includes(name))
+        .map((name) => selectOptionMap[name])
+    } catch (e) {
       return []
     }
   }
@@ -1957,6 +2141,27 @@ export class MultipleSelectFieldType extends FieldType {
   }
 
   acceptSplitCommaSeparatedSelectOptions() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  /**
+   * Accepts the following format: option1,option2,option3
+   */
+  parseQueryParameter(field, value) {
+    const values = value.split(',')
+
+    const selectOptions = field.field.select_options.filter((option) =>
+      values.includes(option.value)
+    )
+
+    return selectOptions.length > 0 ? selectOptions : this.getEmptyValue()
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -2042,6 +2247,18 @@ export class PhoneNumberFieldType extends FieldType {
   }
 
   canBeReferencedByFormulaField() {
+    return true
+  }
+
+  canParseQueryParameter() {
+    return true
+  }
+
+  parseQueryParameter(field, value) {
+    return value
+  }
+
+  getCanImport() {
     return true
   }
 }
@@ -2172,10 +2389,6 @@ export class FormulaFieldType extends FieldType {
 
   getFormViewFieldComponent() {
     return null
-  }
-
-  getCanBePrimaryField() {
-    return false
   }
 
   canBeReferencedByFormulaField() {

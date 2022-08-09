@@ -14,7 +14,10 @@
           @click="recalcAutoComplete"
           @keyup="recalcAutoComplete"
           @keydown.tab="doAutoCompleteAfterTab"
-          @keydown.enter.exact.prevent="$refs.editContext.hide()"
+          @keydown.enter.exact.prevent="
+            $refs.editContext.hide()
+            $emit('hidden', $event)
+          "
         ></AutoExpandableTextarea>
       </div>
       <div v-if="error" class="formula-field__input-error">{{ error }}</div>
@@ -63,8 +66,6 @@ import {
 } from '@baserow/modules/database/formula/autocompleter/formulaAutocompleter'
 import FormulaFieldItemGroup from '@baserow/modules/database/components/formula/FormulaFieldItemGroup'
 import FormulaFieldItemDescription from '@baserow/modules/database/components/formula/FormulaFieldItemDescription'
-
-const TAB_KEYCODE = 9
 
 export default {
   name: 'FormulaAdvancedEditContext',
@@ -176,7 +177,7 @@ export default {
     },
     recalcAutoComplete(event) {
       // Prevent tabs from doing anything as doAutocomplete will handle a tab instead.
-      if (event && event.keyCode === TAB_KEYCODE) {
+      if (event && event.key === 'Tab') {
         event.preventDefault()
         return
       }
@@ -207,7 +208,7 @@ export default {
     },
     doAutoCompleteAfterTab(event) {
       // Prevent tabs from doing anything
-      if (event && event.keyCode === TAB_KEYCODE) {
+      if (event && event.key === 'Tab') {
         event.preventDefault()
       }
       this.doAutoComplete(this.filteredFunctions[0], this.filteredFields[0])

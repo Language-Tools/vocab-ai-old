@@ -318,7 +318,7 @@
         "firstRowHeader": "",
         "limitError": ""
     },
-    "createTableModal": {
+    "importFileModal": {
         "title": "",
         "importLabel": "",
         "newTable": "",
@@ -449,6 +449,10 @@
     },
     "gridViewFieldLinkRow": {
         "unnamed": ""
+    },
+    "gridViewIdentifierOptions": {
+        "id": "",
+        "count": ""
     },
     "previewAny": {
         "externalWarning": ""

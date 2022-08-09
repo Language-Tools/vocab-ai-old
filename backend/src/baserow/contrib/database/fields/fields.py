@@ -2,13 +2,12 @@ from typing import Optional
 
 from django.db import models
 from django.db.models import Field, Value
+from django.db.models.expressions import RawSQL
 from django.db.models.fields.related_descriptors import (
     ForwardManyToOneDescriptor,
     ManyToManyDescriptor,
 )
-from django.db.models.expressions import RawSQL
 from django.utils.functional import cached_property
-
 
 from baserow.contrib.database.formula import BaserowExpression, FormulaHandler
 
@@ -189,6 +188,9 @@ class BaserowExpressionField(models.Field):
         else:
             return value
 
+    def select_format(self, compiler, sql, params):
+        return self.expression_field.select_format(compiler, sql, params)
+
     def pre_save(self, model_instance, add):
         if self.expression is None:
             return Value(None)
@@ -203,6 +205,12 @@ class BaserowExpressionField(models.Field):
                         self.expression, model_instance
                     )
                 )
+
+    @property
+    def valid_for_bulk_update(self):
+        # When the expression is None we are in the error state and so shouldn't be
+        # included in any BULK UPDATE statement.
+        return self.expression is not None
 
 
 class SerialField(models.Field):
@@ -228,3 +236,16 @@ class SerialField(models.Field):
             )
         else:
             return super().pre_save(model_instance, add)
+
+
+class DurationFieldUsingPostgresFormatting(models.DurationField):
+    def to_python(self, value):
+        return value
+
+    def select_format(self, compiler, sql, params):
+        # We want to use postgres's method of converting intervals to strings instead
+        # of pythons timedelta representation. This is so lookups of date intervals
+        # which cast the interval to string inside of the database will have the
+        # same values as non lookup intervals. The postgres str representation is also
+        # more human readable.
+        return sql + "::text", params

@@ -8,21 +8,45 @@
     @hidden="$emit('hidden', { row })"
   >
     <template #content>
-      <h2 v-if="primary !== undefined" class="box__title">
-        {{ getHeading(primary, row) }}
+      <h2 class="box__title">
+        {{ heading }}
       </h2>
-      <RowEditModalField
-        v-for="field in getFields(fields, primary)"
-        :key="'row-edit-field-' + field.id"
-        :ref="'field-' + field.id"
-        :field="field"
+      <RowEditModalFieldsList
+        :primary-is-sortable="primaryIsSortable"
+        :fields="visibleFields"
+        :sortable="!readOnly"
+        :hidden="false"
         :read-only="readOnly"
         :row="row"
         :table="table"
-        @update="update"
         @field-updated="$emit('field-updated', $event)"
         @field-deleted="$emit('field-deleted')"
-      ></RowEditModalField>
+        @order-fields="$emit('order-fields', $event)"
+        @toggle-field-visibility="$emit('toggle-field-visibility', $event)"
+        @update="update"
+      ></RowEditModalFieldsList>
+      <RowEditModalHiddenFieldsSection
+        v-if="hiddenFields.length"
+        :show-hidden-fields="showHiddenFields"
+        @toggle-hidden-fields-visibility="
+          $emit('toggle-hidden-fields-visibility')
+        "
+      >
+        <RowEditModalFieldsList
+          :primary-is-sortable="primaryIsSortable"
+          :fields="hiddenFields"
+          :sortable="false"
+          :hidden="true"
+          :read-only="readOnly"
+          :row="row"
+          :table="table"
+          @field-updated="$emit('field-updated', $event)"
+          @field-deleted="$emit('field-deleted')"
+          @toggle-field-visibility="$emit('toggle-field-visibility', $event)"
+          @update="update"
+        >
+        </RowEditModalFieldsList>
+      </RowEditModalHiddenFieldsSection>
       <div v-if="!readOnly" class="actions">
         <a
           ref="createFieldContextLink"
@@ -44,6 +68,7 @@
         :row="row"
         :read-only="readOnly"
         :table="table"
+        :database="database"
       ></component>
     </template>
   </Modal>
@@ -51,29 +76,48 @@
 
 <script>
 import modal from '@baserow/modules/core/mixins/modal'
-import RowEditModalField from '@baserow/modules/database/components/row/RowEditModalField'
+
 import CreateFieldContext from '@baserow/modules/database/components/field/CreateFieldContext'
+import RowEditModalFieldsList from './RowEditModalFieldsList.vue'
+import RowEditModalHiddenFieldsSection from './RowEditModalHiddenFieldsSection.vue'
+import { getPrimaryOrFirstField } from '@baserow/modules/database/utils/field'
 
 export default {
   name: 'RowEditModal',
   components: {
-    RowEditModalField,
     CreateFieldContext,
+    RowEditModalFieldsList,
+    RowEditModalHiddenFieldsSection,
   },
   mixins: [modal],
   props: {
+    database: {
+      type: Object,
+      required: false,
+      default: null,
+    },
     table: {
       type: Object,
       required: true,
     },
-    primary: {
-      type: Object,
+    primaryIsSortable: {
+      type: Boolean,
       required: false,
-      default: undefined,
+      default: false,
     },
-    fields: {
+    visibleFields: {
       type: Array,
       required: true,
+    },
+    hiddenFields: {
+      type: Array,
+      required: false,
+      default: () => [],
+    },
+    showHiddenFields: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
     rows: {
       type: Array,
@@ -103,6 +147,22 @@ export default {
     },
     row() {
       return this.modalRow.row
+    },
+    heading() {
+      const field = getPrimaryOrFirstField(this.visibleFields)
+
+      if (!field) {
+        return null
+      }
+
+      const name = `field_${field.id}`
+      if (Object.prototype.hasOwnProperty.call(this.row, name)) {
+        return this.$registry
+          .get('field', field.type)
+          .toHumanReadableString(field, this.row[name])
+      } else {
+        return null
+      }
     },
   },
   watch: {
@@ -160,21 +220,6 @@ export default {
     update(context) {
       context.table = this.table
       this.$emit('update', context)
-    },
-    getFields(fields, primary) {
-      return (primary !== undefined ? [primary].concat(fields) : fields)
-        .slice()
-        .sort((a, b) => a.order - b.order)
-    },
-    getHeading(primary, row) {
-      const name = `field_${primary.id}`
-      if (Object.prototype.hasOwnProperty.call(row, name)) {
-        return this.$registry
-          .get('field', primary.type)
-          .toHumanReadableString(primary, row[name])
-      } else {
-        return null
-      }
     },
   },
 }

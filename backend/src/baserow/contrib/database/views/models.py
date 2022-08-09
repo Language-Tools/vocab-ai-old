@@ -191,7 +191,9 @@ class View(
             )
 
         def get_queryset():
-            return through_model.objects.filter(**{field_name: self})
+            return view_type.enhance_field_options_queryset(
+                through_model.objects.filter(**{field_name: self})
+            )
 
         field_options = get_queryset()
 
@@ -212,7 +214,9 @@ class View(
                 with transaction.atomic():
                     # Lock the view so concurrent calls to this method wont create
                     # duplicate field options.
-                    View.objects.filter(id=self.id).select_for_update().first()
+                    View.objects.filter(id=self.id).select_for_update(
+                        of=("self",)
+                    ).first()
 
                     # Invalidate the field options because they could have been
                     # changed concurrently.
@@ -378,7 +382,14 @@ class ViewSort(models.Model):
 
 
 class GridView(View):
+    class RowIdentifierTypes(models.TextChoices):
+        ID = "id"
+        count = "count"
+
     field_options = models.ManyToManyField(Field, through="GridViewFieldOptions")
+    row_identifier_type = models.CharField(
+        choices=RowIdentifierTypes.choices, default="id", max_length=10
+    )
 
 
 class GridViewFieldOptionsManager(models.Manager):
@@ -553,6 +564,7 @@ class FormView(View):
         return (
             FormViewFieldOptions.objects.filter(form_view=self, enabled=True)
             .select_related("field")
+            .prefetch_related("conditions")
             .order_by("order")
         )
 
@@ -592,6 +604,18 @@ class FormViewFieldOptions(models.Model):
         help_text="Indicates whether the field is required for the visitor to fill "
         "out.",
     )
+    show_when_matching_conditions = models.BooleanField(
+        default=False,
+        help_text="Indicates whether this field is visible when the conditions are "
+        "met.",
+    )
+    condition_type = models.CharField(
+        max_length=3,
+        choices=FILTER_TYPES,
+        default=FILTER_TYPE_AND,
+        help_text="Indicates whether all (AND) or any (OR) of the conditions should "
+        "match before shown.",
+    )
     # The default value is the maximum value of the small integer field because a newly
     # created field must always be last.
     order = models.SmallIntegerField(
@@ -604,3 +628,49 @@ class FormViewFieldOptions(models.Model):
             "order",
             "field_id",
         )
+
+    def is_required(self):
+        return (
+            self.required
+            # If the field is only visible when conditions are met, we can't do a
+            # required backend validation because there is no way of knowing whether
+            # the provided values match the conditions in the backend.
+            and (
+                not self.show_when_matching_conditions
+                or len(self.conditions.all()) == 0
+            )
+        )
+
+
+class FormViewFieldOptionsConditionManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(~Q(field__trashed=True))
+
+
+class FormViewFieldOptionsCondition(models.Model):
+    field_option = models.ForeignKey(
+        FormViewFieldOptions,
+        on_delete=models.CASCADE,
+        help_text="The form view option where the condition is related to.",
+        related_name="conditions",
+    )
+    field = models.ForeignKey(
+        "database.Field",
+        on_delete=models.CASCADE,
+        help_text="The field of which the value must be compared to the filter value.",
+    )
+    type = models.CharField(
+        max_length=48,
+        help_text="Indicates how the field's value must be compared to the filter's "
+        "value. The filter is always in this order `field` `type` `value` "
+        "(example: `field_1` `contains` `Test`).",
+    )
+    value = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="The filter value that must be compared to the field's value.",
+    )
+    objects = FormViewFieldOptionsConditionManager()
+
+    class Meta:
+        ordering = ("id",)

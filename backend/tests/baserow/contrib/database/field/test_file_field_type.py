@@ -46,11 +46,6 @@ def test_file_field_type(data_fixture):
     with pytest.raises(ValidationError):
         row_handler.create_row(user=user, table=table, values={"file": {}}, model=model)
 
-    with pytest.raises(ValidationError):
-        row_handler.create_row(
-            user=user, table=table, values={"file": [{"no_name": "test"}]}, model=model
-        )
-
     with pytest.raises(InvalidUserFileNameError):
         row_handler.create_row(
             user=user,
@@ -190,7 +185,7 @@ def test_file_field_type(data_fixture):
     assert results[2].text is None
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_import_export_file_field(data_fixture, tmpdir):
     user = data_fixture.create_user()
     imported_group = data_fixture.create_group(user=user)

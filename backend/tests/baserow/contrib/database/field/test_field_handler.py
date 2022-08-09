@@ -44,14 +44,15 @@ from baserow.contrib.database.rows.handler import RowHandler
 from baserow.contrib.database.table.models import Table
 from baserow.core.exceptions import UserNotInGroup
 
-# You must add --runslow to pytest to run this test, you can do this in intellij by
-# editing the run config for this test and adding --runslow to additional args.
+# You must add --run-disabled-in-ci to pytest to run this test, you can do this in
+# intellij by editing the run config for this test and adding --run-disabled-in-ci to
+# additional args.
 from baserow.core.trash.handler import TrashHandler
 from baserow.test_utils.helpers import setup_interesting_test_table
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.slow
+@pytest.mark.disabled_in_ci
 def test_can_convert_between_all_fields(data_fixture):
     """
     A nuclear option test turned off by default to help verify changes made to
@@ -74,6 +75,7 @@ def test_can_convert_between_all_fields(data_fixture):
     # created. Here the kwargs which control these modes are enumerated so we can then
     # generate every possible type of conversion.
     all_possible_kwargs_per_type = construct_all_possible_field_kwargs(
+        table,
         Table.objects.get(name="link_table"),
         Table.objects.get(name="decimal_link_table"),
         Table.objects.get(name="file_link_table"),

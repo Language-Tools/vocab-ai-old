@@ -82,13 +82,12 @@ export default {
       this.clonedWrapper.appendChild(this.clonedElement)
 
       this.$el.keydownEvent = (event) => {
-        if (event.keyCode === 27) {
+        if (event.key === 'Escape') {
           if (this.dragAndDropDraggingRow !== null) {
             this.$store.dispatch(
               `${this.getDragAndDropStoreName(this)}/cancelRowDrag`,
               {
                 view: this.view,
-                primary: this.primary,
                 fields: this.fields,
                 row: this.dragAndDropDraggingRow,
               }

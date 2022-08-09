@@ -17,6 +17,7 @@
         "change": "Change",
         "delete": "Delete",
         "rename": "Rename",
+        "duplicate": "Duplicate",
         "add": "Add",
         "makeChoice": "Make a choice",
         "cancel": "Cancel",
@@ -25,6 +26,7 @@
         "search": "Search",
         "copy": "Copy",
         "paste": "Paste",
+        "duplicate": "Duplicate",
         "activate": "Activate",
         "deactivate": "Deactivate"
     },
@@ -39,7 +41,8 @@
     "settingType": {
         "account": "Account",
         "password": "Password",
-        "tokens": "API Tokens"
+        "tokens": "API Tokens",
+        "deleteAccount": "Delete account"
     },
     "userFileUploadType": {
         "file": "my device",
@@ -133,6 +136,9 @@
         "isNotDate": "is not date",
         "isToday": "is today",
         "isDaysAgo": "is days ago",
+        "isMonthsAgo": "is months ago",
+        "isYearsAgo": "is years ago",
+        "inThisWeek": "in this week",
         "inThisMonth": "in this month",
         "inThisYear": "in this year",
         "lowerThan": "lower than",
@@ -147,9 +153,6 @@
             "linkName": "view",
             "formLinkName": "form"
         }
-    },
-    "premium": {
-        "deactivated": "Available in premium version"
     },
     "trashType": {
         "group": "group",
@@ -171,8 +174,11 @@
         },
         "eventType": {
             "rowCreated": "When a row is created",
+            "rowsCreated": "Rows are created",
             "rowUpdated": "When a row is updated",
-            "rowDeleted": "When a row is deleted"
+            "rowsUpdated": "Rows are updated",
+            "rowDeleted": "When a row is deleted",
+            "rowsDeleted": "Rows are deleted"
         }
     },
     "clientHandler": {
@@ -211,7 +217,30 @@
         "cannotRestoreAsRelatedTableTrashedTitle": "Please restore the related tables first.",
         "cannotRestoreAsRelatedTableTrashedDescription": "You cannot restore this field because it depends on other tables which are still trashed. Please restore the other related tables first.",
         "groupUserIsLastAdminTitle": "Can't leave the group",
-        "groupUserIsLastAdminDescription": "It's not possible to leave the group because you're the last admin. Please delete the group or give another user admin permissions."
+        "groupUserIsLastAdminDescription": "It's not possible to leave the group because you're the last admin or because other admin's accounts are pending deletion. Please delete the group or give another user admin permissions.",
+        "errorMaxJobCountExceededTitle": "Couldn't start action.",
+        "errorMaxJobCountExceededDescription": "You cannot start any more of these actions as you have others still running in the background. Please try again once the previous actions complete.",
+        "failedToLockFieldDueToConflictTitle": "Can't change field",
+        "failedToLockFieldDueToConflictDescription": "Another operation is currently updating or using this field, please wait until it finishes before trying again.",
+        "failedToLockTableDueToConflictTitle": "Can't create field",
+        "failedToLockTableDueToConflictDescription": "Another operation is currently updating or using this table, please wait until it finishes before trying again.",
+        "failedToUndoRedoDueToConflictTitle": "Can't undo/redo",
+        "failedToUndoRedoDueToConflictDescription": "Another operation is currently running blocking your undo or redo, please wait until it finishes before trying again.",
+        "errorMaxJobCountExceededDescription": "You cannot start any more of these actions as you have others still running in the background. Please try again once the previous actions complete.",
+        "groupUserIsLastAdminDescription": "It's not possible to leave the group because you're the last admin or because other admin's accounts are pending deletion. Please delete the group or give another user admin permissions.",
+        "errorMaxJobCountExceededDescription": "You cannot start any more of these actions as you have others still running in the background. Please try again once the previous actions complete.",
+        "maximumSnapshotsReachedTitle": "Snapshots limit reached",
+        "maximumSnapshotsReachedDescription": "The maximum number of snapshots in a group has been reached.",
+        "snapshotBeingCreatedTitle": "A snapshot is already being created",
+        "snapshotBeingCreatedDescription": "It is not possible to create multiple snapshots at the same time.",
+        "snapshotBeingRestoredTitle": "The snapshot is being restored",
+        "snapshotBeingRestoredDescription": "It is not possible to use snapshots that are currently being restored.",
+        "snapshotBeingDeletedTitle": "The snapshot is being deleted",
+        "snapshotBeingDeletedDescription": "It is not possible to use snapshots that are currently being deleted.",
+        "snapshotNameNotUniqueTitle": "The snapshot name has to be unique.",
+        "snapshotNameNotUniqueDescription": "All snapshot names have to be unique per application.",
+        "snapshotOperationLimitExceededTitle": "Limit reached",
+        "snapshotOperationLimitExceededDescription": "You have reached a limit on the number of running snapshot operations. Please wait until previous operation finishes."
     },
     "importerType": {
         "csv": "Import a CSV file",
@@ -230,13 +259,18 @@
         "listRows": "List rows",
         "getRow": "Get row",
         "createRow": "Create row",
+        "createRows": "Create rows",
         "updateRow": "Update row",
+        "updateRows": "Update rows",
         "moveRow": "Move row",
         "deleteRow": "Delete row",
+        "deleteRows": "Delete rows",
         "queryParameters": "Query parameters",
         "pathParameters": "Path parameters",
         "requestBodySchema": "Request body schema",
-        "userFieldNamesDescription": "When any value is provided for the `user_field_names` GET param then field names returned by this endpoint will be the actual names of the fields.\n\n If the `user_field_names` GET param is not provided, then all returned field names will be `field_` followed by the id of the field. For example `field_1` refers to the field with an id of `1`."
+        "userFieldNamesDescription": "When any value is provided for the `user_field_names` GET param then field names returned by this endpoint will be the actual names of the fields.\n\n If the `user_field_names` GET param is not provided, then all returned field names will be `field_` followed by the id of the field. For example `field_1` refers to the field with an id of `1`.",
+        "singleRow": "Single",
+        "batchRows": "Batch"
     },
     "exporterType": {
         "csv": "Export to CSV"
@@ -310,9 +344,15 @@
         "variancePopDescription": "Calculates the population variance of the values and returns the result. The population variance should be used when the provided values contain a  value for every single piece of data in the population.",
         "avgDescription": "Averages all of the values and returns the result.",
         "sumDescription": "Sums all of the values and returns the result.",
-        "filterDescription": "Filters down an expression involving a lookup/link field reference or a lookup function call."
+        "filterDescription": "Filters down an expression involving a lookup/link field reference or a lookup function call.",
+        "roundDescription": "Returns first argument rounded to the number of digits specified by the second argument.",
+        "intDescription": "Returns only the first argument converted into an integer by truncating any decimal places."
     },
     "functionnalGridViewFieldLinkRow": {
         "unnamed": "unnamed row {value}"
+    },
+    "urlCheck": {
+        "invalidUrlEnvVarTitle": "Invalid {name}",
+        "invalidUrlEnvVarDescription": "The {name} environment variable has been set to an invalid value. Your site admin must change {name} to a valid URL starting with http:// or https:// and then restart Baserow to fix this error."
     }
 }

@@ -35,27 +35,38 @@
           />
           <a
             class="button button--large button--ghost file-upload__button"
+            :class="{ 'button--loading': state !== null }"
             @click.prevent="$refs.file.click($event)"
           >
             <i class="fas fa-cloud-upload-alt"></i>
             {{ $t('tableXMLImporter.chooseButton') }}
           </a>
-          <div class="file-upload__file">{{ filename }}</div>
+          <div v-if="state === null" class="file-upload__file">
+            {{ filename }}
+          </div>
+          <template v-else>
+            <ProgressBar
+              :value="fileLoadingProgress"
+              :show-value="state === 'loading'"
+              :status="
+                state === 'loading' ? $t('importer.loading') : stateTitle
+              "
+            />
+          </template>
         </div>
         <div v-if="$v.filename.$error" class="error">
           {{ $t('error.fieldRequired') }}
         </div>
       </div>
     </div>
-    <div v-if="error !== ''" class="alert alert--error alert--has-icon">
-      <div class="alert__icon">
-        <i class="fas fa-exclamation"></i>
-      </div>
-      <div class="alert__title">{{ $t('common.wrong') }}</div>
-      <p class="alert__content">
-        {{ error }}
-      </p>
-    </div>
+    <Alert
+      v-if="error !== ''"
+      :title="$t('common.wrong')"
+      type="error"
+      icon="exclamation"
+    >
+      {{ error }}
+    </Alert>
     <TableImporterPreview
       v-if="error === '' && Object.keys(preview).length !== 0"
       :preview="preview"
@@ -69,7 +80,7 @@ import { required } from 'vuelidate/lib/validators'
 import form from '@baserow/modules/core/mixins/form'
 import importer from '@baserow/modules/database/mixins/importer'
 import TableImporterPreview from '@baserow/modules/database/components/table/TableImporterPreview'
-import { parseXML } from '@baserow/modules/database/utils/xml'
+import { XMLParser } from '@baserow/modules/database/utils/xml'
 
 export default {
   name: 'TableXMLImporter',
@@ -77,19 +88,13 @@ export default {
   mixins: [form, importer],
   data() {
     return {
-      values: {
-        data: '',
-        firstRowHeader: true,
-      },
       filename: '',
-      error: '',
       rawData: null,
-      preview: {},
     }
   },
   validations: {
     values: {
-      data: { required },
+      getData: { required },
     },
     filename: { required },
   },
@@ -107,65 +112,87 @@ export default {
       }
 
       const file = event.target.files[0]
-      const maxSize = 1024 * 1024 * 15
+      const maxSize =
+        parseInt(this.$env.BASEROW_MAX_IMPORT_FILE_SIZE_MB, 10) * 1024 * 1024
 
       if (file.size > maxSize) {
+        this.handleImporterError(
+          this.$t('tableXMLImporter.limitFileSize', {
+            limit: this.$env.BASEROW_MAX_IMPORT_FILE_SIZE_MB,
+          })
+        )
         this.filename = ''
-        this.values.data = ''
-        this.error = this.$t('tableXMLImporter.limitFileSize', {
-          limit: 15,
-        })
-        this.preview = {}
       } else {
+        this.resetImporterState()
+        this.fileLoadingProgress = 0
+
+        this.$emit('changed')
+        this.state = 'loading'
         this.filename = file.name
         const reader = new FileReader()
+        reader.addEventListener('progress', (event) => {
+          this.fileLoadingProgress = (event.loaded / event.total) * 100
+        })
         reader.addEventListener('load', (event) => {
           this.rawData = event.target.result
+          this.fileLoadingProgress = 100
           this.reload()
         })
         reader.readAsBinaryString(event.target.files[0])
       }
     },
-    reload() {
-      const [header, xmlData, errors] = parseXML(this.rawData)
+    async reload() {
+      this.resetImporterState()
+      this.state = 'parsing'
+      await this.$ensureRender()
+
+      const xmlParser = new XMLParser()
+      xmlParser.parse(this.rawData)
+
+      await this.$ensureRender()
+      xmlParser.loadXML(6)
+
+      await this.$ensureRender()
+      const [header, xmlData, errors] = xmlParser.transform()
 
       if (errors.length > 0) {
-        this.values.data = ''
-        this.error = this.$t('tableXMLImporter.processingError', {
-          errors: errors.join('\n'),
-        })
-        this.preview = {}
+        this.handleImporterError(
+          this.$t('tableXMLImporter.processingError', {
+            errors: errors.join('\n'),
+          })
+        )
         return
       }
 
       if (xmlData.length === 0) {
-        this.values.data = ''
-        this.error = this.$t('tableXMLImporter.emptyError')
-        this.preview = {}
+        this.handleImporterError(this.$t('tableXMLImporter.emptyError'))
         return
-      }
-
-      let hasHeader = false
-      if (header.length > 0) {
-        xmlData.unshift(header)
-        hasHeader = true
       }
 
       const limit = this.$env.INITIAL_TABLE_DATA_LIMIT
       if (limit !== null && xmlData.length > limit) {
-        this.values.data = ''
-        this.error = this.$t('tableXMLImporter.limitError', { limit })
-        this.preview = {}
+        this.handleImporterError(
+          this.$t('tableXMLImporter.limitError', { limit })
+        )
         return
       }
 
-      const dataWithHeader = this.ensureHeaderExistsAndIsValid(
-        xmlData,
-        hasHeader
-      )
-      this.values.data = JSON.stringify(dataWithHeader)
-      this.error = ''
-      this.preview = this.getPreview(dataWithHeader)
+      this.values.header = this.prepareHeader(header, xmlData)
+      this.values.getData = async () => {
+        await this.$ensureRender()
+        xmlParser.loadXML()
+
+        await this.$ensureRender()
+        const [, xmlData, errors] = xmlParser.transform()
+
+        if (errors.length > 0) {
+          throw new Error(errors)
+        }
+
+        return xmlData
+      }
+      this.state = null
+      this.preview = this.getPreview(this.values.header, xmlData)
     },
   },
 }

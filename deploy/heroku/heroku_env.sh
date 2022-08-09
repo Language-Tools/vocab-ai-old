@@ -10,6 +10,7 @@ export BASEROW_RUN_MINIMAL=yes
 export DISABLE_EMBEDDED_PSQL=yes
 export DISABLE_EMBEDDED_REDIS=yes
 export SYNC_TEMPLATES_ON_STARTUP="${SYNC_TEMPLATES_ON_STARTUP:-false}"
+export BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION=${BASEROW_TRIGGER_SYNC_TEMPLATES_AFTER_MIGRATION:-$SYNC_TEMPLATES_ON_STARTUP}
 export MIGRATE_ON_STARTUP="${MIGRATE_ON_STARTUP:-false}"
 # Heroku does not support mounting volumes!
 export DISABLE_VOLUME_CHECK=yes
@@ -29,3 +30,6 @@ export EMAIL_SMTP_PASSWORD=$MAILGUN_SMTP_PASSWORD
 # so we can setup the DATA_DIR.
 DOCKER_USER=$(whoami)
 export DOCKER_USER
+
+# We must run the caddy user as the docker user to prevent supervisord errors
+export BASEROW_CADDY_USER="${BASEROW_CADDY_USER:-$DOCKER_USER}"

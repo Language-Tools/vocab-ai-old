@@ -1,3 +1,6 @@
+import { UNDO_REDO_ACTION_GROUP_HEADER } from '@baserow/modules/database/utils/action'
+import addPublicAuthTokenHeader from '@baserow/modules/database/utils/publicView'
+
 export default (client) => {
   return {
     fetchAll(
@@ -62,6 +65,9 @@ export default (client) => {
     update(viewId, values) {
       return client.patch(`/database/views/${viewId}/`, values)
     },
+    duplicate(viewId) {
+      return client.post(`/database/views/${viewId}/duplicate/`)
+    },
     order(tableId, order) {
       return client.post(`/database/views/table/${tableId}/order/`, {
         view_ids: order,
@@ -73,17 +79,27 @@ export default (client) => {
     fetchFieldOptions(viewId) {
       return client.get(`/database/views/${viewId}/field-options/`)
     },
-    updateFieldOptions({ viewId, values }) {
-      return client.patch(`/database/views/${viewId}/field-options/`, values)
+    updateFieldOptions({ viewId, values, undoRedoActionGroupId = null }) {
+      const config = {}
+      if (undoRedoActionGroupId != null) {
+        config.headers = {
+          [UNDO_REDO_ACTION_GROUP_HEADER]: undoRedoActionGroupId,
+        }
+      }
+      return client.patch(
+        `/database/views/${viewId}/field-options/`,
+        values,
+        config
+      )
     },
     rotateSlug(viewId) {
       return client.post(`/database/views/${viewId}/rotate-slug/`)
     },
-    linkRowFieldLookup(slug, fieldId, page, search = null) {
+    linkRowFieldLookup(slug, fieldId, page, search = null, size = 100) {
       const config = {
         params: {
           page,
-          size: 100,
+          size,
         },
       }
 
@@ -95,6 +111,13 @@ export default (client) => {
         `/database/views/${slug}/link-row-field-lookup/${fieldId}/`,
         config
       )
+    },
+    fetchPublicViewInfo(viewSlug, publicAuthToken = null) {
+      const config = {}
+      if (publicAuthToken) {
+        addPublicAuthTokenHeader(config, publicAuthToken)
+      }
+      return client.get(`/database/views/${viewSlug}/public/info/`, config)
     },
   }
 }

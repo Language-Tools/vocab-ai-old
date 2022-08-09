@@ -52,7 +52,6 @@
           ref="editContext"
           :option="option"
           :fields="fields"
-          :primary="primary"
           :store-prefix="storePrefix"
           @create-row="$emit('create-row', { option })"
           @refresh="$emit('refresh', $event)"
@@ -76,6 +75,7 @@
               v-show="slot.position != -1"
               :key="'card-' + slot.id"
               :fields="cardFields"
+              :decorations-by-place="decorationsByPlace"
               :row="slot.row"
               :cover-image-field="coverImageField"
               :style="{
@@ -138,11 +138,12 @@ import InfiniteScroll from '@baserow/modules/core/components/helpers/InfiniteScr
 import { populateRow } from '@baserow_premium/store/view/kanban'
 import KanbanViewStackContext from '@baserow_premium/components/views/kanban/KanbanViewStackContext'
 import { getCardHeight } from '@baserow/modules/database/utils/card'
+import viewDecoration from '@baserow/modules/database/mixins/viewDecoration'
 
 export default {
   name: 'KanbanViewStack',
   components: { InfiniteScroll, RowCard, KanbanViewStackContext },
-  mixins: [kanbanViewHelper],
+  mixins: [kanbanViewHelper, viewDecoration],
   props: {
     option: {
       validator: (prop) => typeof prop === 'object' || prop === null,
@@ -163,10 +164,6 @@ export default {
     },
     fields: {
       type: Array,
-      required: true,
-    },
-    primary: {
-      type: Object,
       required: true,
     },
     readOnly: {
@@ -227,11 +224,7 @@ export default {
     },
     coverImageField() {
       const fieldId = this.view.card_cover_image_field
-      return (
-        [this.primary]
-          .concat(this.fields)
-          .find((field) => field.id === fieldId) || null
-      )
+      return this.fields.find((field) => field.id === fieldId) || null
     },
   },
   watch: {
@@ -304,7 +297,7 @@ export default {
       )
 
       this.$el.keydownEvent = (event) => {
-        if (event.keyCode === 27) {
+        if (event.key === 'Escape') {
           if (this.draggingRow !== null) {
             this.$store.dispatch(
               this.storePrefix + 'view/kanban/cancelRowDrag',
@@ -356,7 +349,6 @@ export default {
             {
               table: this.table,
               fields: this.fields,
-              primary: this.primary,
             }
           )
         } catch (error) {

@@ -1,23 +1,16 @@
 import { firstBy } from 'thenby'
 import BigNumber from 'bignumber.js'
+import { maxPossibleOrderValue } from '@baserow/modules/database/viewTypes'
 
 /**
  * Generates a sort function based on the provided sortings.
  */
-export function getRowSortFunction(
-  $registry,
-  sortings,
-  fields,
-  primary = null
-) {
+export function getRowSortFunction($registry, sortings, fields) {
   let sortFunction = firstBy()
 
   sortings.forEach((sort) => {
     // Find the field that is related to the sort.
-    let field = fields.find((f) => f.id === sort.field)
-    if (field === undefined && primary !== null && primary.id === sort.field) {
-      field = primary
-    }
+    const field = fields.find((f) => f.id === sort.field)
 
     if (field !== undefined) {
       const fieldName = `field_${field.id}`
@@ -32,6 +25,49 @@ export function getRowSortFunction(
   )
   sortFunction = sortFunction.thenBy((a, b) => a.id - b.id)
   return sortFunction
+}
+/**
+ * Generates a sort function for fields based on order and id.
+ */
+export function sortFieldsByOrderAndIdFunction(fieldOptions) {
+  return (a, b) => {
+    const orderA = fieldOptions[a.id]
+      ? fieldOptions[a.id].order
+      : maxPossibleOrderValue
+    const orderB = fieldOptions[b.id]
+      ? fieldOptions[b.id].order
+      : maxPossibleOrderValue
+
+    // First by order.
+    if (orderA > orderB) {
+      return 1
+    } else if (orderA < orderB) {
+      return -1
+    }
+
+    // Then by id.
+    return a - b
+  }
+}
+
+/**
+ * Returns only fields that are visible (not hidden).
+ */
+export function filterVisibleFieldsFunction(fieldOptions) {
+  return (field) => {
+    const exists = Object.prototype.hasOwnProperty.call(fieldOptions, field.id)
+    return !exists || !fieldOptions[field.id].hidden
+  }
+}
+
+/**
+ * Returns only fields that are visible (not hidden).
+ */
+export function filterHiddenFieldsFunction(fieldOptions) {
+  return (field) => {
+    const exists = Object.prototype.hasOwnProperty.call(fieldOptions, field.id)
+    return exists && fieldOptions[field.id].hidden
+  }
 }
 
 /**
@@ -179,4 +215,39 @@ export function newFieldMatchesActiveSearchTerm(
     )
   }
   return false
+}
+
+export function getOrderBy(rootGetters, viewId) {
+  if (rootGetters['page/view/public/getIsPublic']) {
+    const view = rootGetters['view/get'](viewId)
+    return view.sortings
+      .map((sort) => {
+        return `${sort.order === 'DESC' ? '-' : ''}field_${sort.field}`
+      })
+      .join(',')
+  } else {
+    return ''
+  }
+}
+
+export function getFilters(rootGetters, viewId) {
+  const filters = {}
+
+  if (rootGetters['page/view/public/getIsPublic']) {
+    const view = rootGetters['view/get'](viewId)
+
+    if (!view.filters_disabled) {
+      view.filters.forEach((filter) => {
+        const name = `filter__field_${filter.field}__${filter.type}`
+        if (!Object.prototype.hasOwnProperty.call(filters, name)) {
+          filters[name] = []
+        }
+        filters[name].push(filter.value)
+      })
+    }
+
+    filters.filter_type = [view.filter_type]
+  }
+
+  return filters
 }

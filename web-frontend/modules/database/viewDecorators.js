@@ -28,9 +28,16 @@ export class ViewDecoratorType extends Registerable {
   getDeactivatedText({ view }) {}
 
   /**
+   * When the deactivated view decorator is clicked, this modal will be shown.
+   */
+  getDeactivatedClickModal() {
+    return null
+  }
+
+  /**
    * Indicates if the decorator type is disabled.
    */
-  isDeactivated({ view }) {
+  isDeactivated(groupId) {
     return false
   }
 

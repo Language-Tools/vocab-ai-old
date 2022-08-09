@@ -1,4 +1,5 @@
 import logging
+import traceback
 from copy import deepcopy
 from typing import (
     Dict,
@@ -12,38 +13,37 @@ from typing import (
     Tuple,
     Callable,
 )
-from psycopg2 import sql
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import connection
 from django.db.models import QuerySet
-from django.db.utils import ProgrammingError, DataError
-
+from django.db.utils import ProgrammingError, DataError, DatabaseError
+from psycopg2 import sql
 
 from baserow.contrib.database.db.schema import (
     lenient_schema_editor,
     safe_django_schema_editor,
 )
-from baserow.contrib.database.fields.constants import (
-    RESERVED_BASEROW_FIELD_NAMES,
-    UPSERT_OPTION_DICT_KEY,
-)
-from baserow.contrib.database.fields.models import TextField
-from baserow.contrib.database.fields.field_converters import (
-    MultipleSelectConversionConfig,
-)
-from baserow.contrib.database.table.models import Table
-from baserow.contrib.database.views.handler import ViewHandler
 from baserow.contrib.database.db.sql_queries import (
     sql_drop_try_cast,
     sql_create_try_cast,
 )
+from baserow.contrib.database.fields.constants import (
+    RESERVED_BASEROW_FIELD_NAMES,
+    UPSERT_OPTION_DICT_KEY,
+)
+from baserow.contrib.database.fields.field_converters import (
+    MultipleSelectConversionConfig,
+)
+from baserow.contrib.database.fields.models import TextField
+from baserow.contrib.database.table.models import Table
+from baserow.contrib.database.views.handler import ViewHandler
 from baserow.core.trash.exceptions import RelatedTableTrashedException
 from baserow.core.trash.handler import TrashHandler
-from baserow.core.utils import extract_allowed, set_allowed_attrs
+from baserow.core.utils import extract_allowed, set_allowed_attrs, find_unused_name
 from .dependencies.handler import FieldDependencyHandler
-from .dependencies.update_collector import CachingFieldUpdateCollector
+from .dependencies.update_collector import FieldUpdateCollector
 from .exceptions import (
     PrimaryFieldAlreadyExists,
     CannotDeletePrimaryField,
@@ -56,7 +56,9 @@ from .exceptions import (
     InvalidBaserowFieldName,
     MaxFieldNameLengthExceeded,
     IncompatibleFieldTypeForUniqueValues,
+    FailedToLockFieldDueToConflict,
 )
+from .field_cache import FieldCache
 from .models import Field, SelectOption, SpecificFieldForUpdate
 from .registries import (
     field_type_registry,
@@ -93,6 +95,7 @@ def _validate_field_name(
     :raises MaxFieldNameLengthExceeded: When a provided field name is too long.
     :return:
     """
+
     if "name" not in field_values:
         if raise_if_name_missing:
             raise InvalidBaserowFieldName()
@@ -136,15 +139,12 @@ class FieldHandler:
         Selects a field with a given id from the database.
 
         :param field_id: The identifier of the field that must be returned.
-        :type field_id: int
         :param field_model: If provided that model's objects are used to select the
             field. This can for example be useful when you want to select a TextField or
             other child of the Field model.
-        :type field_model: Type[Field]
         :param base_queryset: The base queryset from where to select the field.
             object. This can for example be used to do a `select_related`. Note that
             if this is used the `field_model` parameter doesn't work anymore.
-        :type base_queryset: Queryset
         :raises FieldDoesNotExist: When the field with the provided id does not exist.
         :return: The requested field instance of the provided id.
         :rtype: Field
@@ -169,14 +169,36 @@ class FieldHandler:
         return field
 
     def get_specific_field_for_update(
-        self, field_id: int, field_model: Optional[Type[T]] = None
+        self,
+        field_id: int,
+        field_model: Optional[Type[T]] = None,
     ) -> SpecificFieldForUpdate:
+        """
+        Returns the .specific field which has been locked FOR UPDATE.
+
+        :param field_id: The field to lock and retrieve the specific instance of.
+        :param field_model: The field_model to query using, provide a specific one if
+            you want an exception raised if the field is not of this field_model type.
+        :return: A specific locked field instance
+        """
+
+        queryset = Field.objects.select_related("table").select_for_update(
+            of=("self", "table"), nowait=settings.BASEROW_NOWAIT_FOR_LOCKS
+        )
+
+        try:
+            specific_field = self.get_field(
+                field_id, field_model, base_queryset=queryset
+            ).specific
+        except DatabaseError as e:
+            if "could not obtain lock on row" in traceback.format_exc():
+                raise FailedToLockFieldDueToConflict() from e
+            else:
+                raise e
 
         return cast(
             SpecificFieldForUpdate,
-            self.get_field(
-                field_id, field_model, base_queryset=Field.objects.select_for_update()
-            ).specific,
+            specific_field,
         )
 
     def create_field(
@@ -253,9 +275,10 @@ class FieldHandler:
             pk=primary_key,
             **field_values,
         )
-        update_collector = CachingFieldUpdateCollector(table)
-        instance.save(field_lookup_cache=update_collector, raise_if_invalid=True)
-        FieldDependencyHandler.rebuild_dependencies(instance, update_collector)
+
+        field_cache = FieldCache()
+        instance.save(field_cache=field_cache, raise_if_invalid=True)
+        FieldDependencyHandler.rebuild_dependencies(instance, field_cache)
 
         # Add the field to the table schema.
         with safe_django_schema_editor() as schema_editor:
@@ -268,20 +291,26 @@ class FieldHandler:
 
         field_type.after_create(instance, to_model, user, connection, before)
 
-        update_collector.cache_model_fields(to_model)
+        field_cache.cache_model_fields(to_model)
+        update_collector = FieldUpdateCollector(table)
         for (
             dependant_field,
             dependant_field_type,
             via_path_to_starting_table,
-        ) in instance.dependant_fields_with_types(field_cache=update_collector):
+        ) in instance.dependant_fields_with_types(
+            field_cache=field_cache, associated_relation_changed=True
+        ):
             dependant_field_type.field_dependency_created(
                 dependant_field,
                 instance,
-                via_path_to_starting_table,
                 update_collector,
+                field_cache,
+                via_path_to_starting_table,
             )
 
-        updated_fields = update_collector.apply_updates_and_get_updated_fields()
+        updated_fields = update_collector.apply_updates_and_get_updated_fields(
+            field_cache
+        )
 
         field_created.send(
             self,
@@ -357,12 +386,18 @@ class FieldHandler:
         # migrate the field to the new type. Because the type has changed we also need
         # to remove all view filters.
         baserow_field_type_changed = from_field_type.type != to_field_type_name
+        field_cache = FieldCache()
         if baserow_field_type_changed:
             to_field_type = field_type_registry.get(to_field_type_name)
 
             if field.primary and not to_field_type.can_be_primary_field:
                 raise IncompatiblePrimaryFieldTypeError(to_field_type_name)
 
+            dependants_broken_due_to_type_change = (
+                from_field_type.get_dependants_which_will_break_when_field_type_changes(
+                    field, to_field_type, field_cache
+                )
+            )
             new_model_class = to_field_type.model_class
             field.change_polymorphic_type_to(new_model_class)
 
@@ -370,6 +405,7 @@ class FieldHandler:
             # like filters or sortings need to be changed.
             ViewHandler().field_type_changed(field)
         else:
+            dependants_broken_due_to_type_change = []
             to_field_type = from_field_type
 
         allowed_fields = ["name"] + to_field_type.allowed_fields
@@ -384,9 +420,8 @@ class FieldHandler:
 
         field = set_allowed_attrs(field_values, allowed_fields, field)
 
-        update_collector = CachingFieldUpdateCollector(field.table)
-        field.save(field_lookup_cache=update_collector, raise_if_invalid=True)
-        FieldDependencyHandler.rebuild_dependencies(field, update_collector)
+        field.save(field_cache=field_cache, raise_if_invalid=True)
+        FieldDependencyHandler.rebuild_dependencies(field, field_cache)
         # If no converter is found we are going to convert to field using the
         # lenient schema editor which will alter the field's type and set the data
         # value to null if it can't be converted.
@@ -439,7 +474,6 @@ class FieldHandler:
             # If no field converter is found we are going to alter the field using the
             # the lenient schema editor.
             with lenient_schema_editor(
-                connection,
                 from_field_type.get_alter_column_prepare_old_value(
                     connection, old_field, field
                 ),
@@ -490,21 +524,27 @@ class FieldHandler:
         if after_schema_change_callback:
             after_schema_change_callback(field)
 
-        update_collector.cache_model_fields(to_model)
+        field_cache.cache_model_fields(to_model)
+        update_collector = FieldUpdateCollector(field.table)
         for (
             dependant_field,
             dependant_field_type,
             via_path_to_starting_table,
-        ) in field.dependant_fields_with_types(field_cache=update_collector):
+        ) in dependants_broken_due_to_type_change + field.dependant_fields_with_types(
+            field_cache=field_cache, associated_relation_changed=True
+        ):
             dependant_field_type.field_dependency_updated(
                 dependant_field,
                 field,
                 old_field,
-                via_path_to_starting_table,
                 update_collector,
+                field_cache,
+                via_path_to_starting_table,
             )
 
-        updated_fields = update_collector.apply_updates_and_get_updated_fields()
+        updated_fields = update_collector.apply_updates_and_get_updated_fields(
+            field_cache
+        )
 
         ViewHandler().field_updated(field)
 
@@ -528,6 +568,7 @@ class FieldHandler:
         field: Field,
         create_separate_trash_entry=True,
         update_collector=None,
+        field_cache=None,
         apply_and_send_updates=True,
         allow_deleting_primary=False,
     ) -> List[Field]:
@@ -542,6 +583,7 @@ class FieldHandler:
             this field.
         :param update_collector: An optional update collector which will be used to
             store related field updates in.
+        :param field_cache: An optional field cache to be used when fetching fields.
         :param apply_and_send_updates: Set to False to disable related field updates
             being applied and any signals from being sent.
         :param allow_deleting_primary: Set to true if its OK for a primary field to be
@@ -565,10 +607,12 @@ class FieldHandler:
         field = field.specific
 
         if update_collector is None:
-            update_collector = CachingFieldUpdateCollector(field.table)
+            update_collector = FieldUpdateCollector(field.table)
+        if field_cache is None:
+            field_cache = FieldCache()
 
         dependant_fields = field.dependant_fields_with_types(
-            field_cache=update_collector
+            field_cache=field_cache, associated_relation_changed=True
         )
 
         before_return = before_field_deleted.send(
@@ -585,6 +629,9 @@ class FieldHandler:
             field,
             create_trash_entry=create_separate_trash_entry,
         )
+        # The trash call above might have just caused a massive field update to lots of
+        # different fields. We need to reset our cache accordingly.
+        field_cache.reset_cache()
 
         FieldDependencyHandler.break_dependencies_delete_dependants(field)
 
@@ -596,12 +643,15 @@ class FieldHandler:
             dependant_field_type.field_dependency_deleted(
                 dependant_field,
                 field,
-                via_path_to_starting_table,
                 update_collector,
+                field_cache,
+                via_path_to_starting_table,
             )
 
         if apply_and_send_updates:
-            updated_fields = update_collector.apply_updates_and_get_updated_fields()
+            updated_fields = update_collector.apply_updates_and_get_updated_fields(
+                field_cache
+            )
             field_deleted.send(
                 self,
                 field_id=field.id,
@@ -725,69 +775,27 @@ class FieldHandler:
 
         max_field_name_length = Field.get_max_name_length()
 
-        # If the field_name_to_try is longer than the maximally allowed
-        # field name length the name needs to be truncated.
-        field_names_to_try = [
-            item[0:max_field_name_length] for item in field_names_to_try
-        ]
-        # Check if any of the names to try are available by finding any existing field
-        # names with the same name.
-        taken_field_names = set(
-            Field.objects.exclude(id__in=field_ids_to_ignore)
-            .filter(table=table, name__in=field_names_to_try)
-            .values("name")
-            .distinct()
-            .values_list("name", flat=True)
-        )
-        # If there are more names to try than the ones used in the table then there must
-        # be one which isn't used.
-        if len(set(field_names_to_try)) > len(taken_field_names):
-            # Loop over to ensure we maintain the ordering provided by
-            # field_names_to_try, so we always return the first available name and
-            # not any.
-            for field_name in field_names_to_try:
-                if field_name not in taken_field_names:
-                    return field_name
-
-        # None of the names in the param list are available, now using the last one lets
-        # append a number to the name until we find a free one.
-        original_field_name = field_names_to_try[-1]
-
         # Lookup any existing field names. This way we can skip these and ensure our
         # new field has a unique name.
-        existing_field_name_collisions = set(
+        existing_field_name_collisions = (
             Field.objects.exclude(id__in=field_ids_to_ignore)
             .filter(table=table)
             .order_by("name")
             .distinct()
             .values_list("name", flat=True)
         )
-        i = 2
-        while True:
-            suffix_to_append = f" {i}"
-            suffix_length = len(suffix_to_append)
-            length_of_original_field_name_plus_suffix = (
-                len(original_field_name) + suffix_length
-            )
 
-            # At this point we know, that the original_field_name can only
-            # be maximally the length of max_field_name_length. Therefore
-            # if the length_of_original_field_name_plus_suffix is longer
-            # we can further truncate the field_name by the length of the
-            # suffix.
-            if length_of_original_field_name_plus_suffix > max_field_name_length:
-                field_name = f"{original_field_name[:-suffix_length]}{suffix_to_append}"
-            else:
-                field_name = f"{original_field_name}{suffix_to_append}"
-
-            i += 1
-            if field_name not in existing_field_name_collisions:
-                return field_name
+        return find_unused_name(
+            field_names_to_try,
+            existing_field_name_collisions,
+            max_length=max_field_name_length,
+        )
 
     def restore_field(
         self,
         field: Field,
-        update_collector: Optional[CachingFieldUpdateCollector] = None,
+        update_collector: Optional[FieldUpdateCollector] = None,
+        field_cache: Optional[FieldCache] = None,
         apply_and_send_updates: bool = True,
     ):
         """
@@ -796,6 +804,7 @@ class FieldHandler:
         :param field: The trashed field to restore.
         :param update_collector: An optional update collector that will be used to
             collect any resulting field updates due to the restore.
+        :param field_cache: An optional field cache used to get fields.
         :param apply_and_send_updates: Whether or not a field_restored signal should be
             sent after restoring this field.
         :raises CantRestoreTrashedItem: Raised when this field cannot yet be restored
@@ -822,24 +831,33 @@ class FieldHandler:
             field = field.specific
             field.name = field.name
             field.trashed = False
-            if update_collector is None:
-                update_collector = CachingFieldUpdateCollector(field.table)
-            field.save(field_lookup_cache=update_collector)
 
-            FieldDependencyHandler.rebuild_dependencies(field, update_collector)
+            if update_collector is None:
+                update_collector = FieldUpdateCollector(field.table)
+            if field_cache is None:
+                field_cache = FieldCache()
+
+            field.save(field_cache=field_cache)
+
+            FieldDependencyHandler.rebuild_dependencies(field, field_cache)
             for (
                 dependant_field,
                 dependant_field_type,
                 via_path_to_starting_table,
-            ) in field.dependant_fields_with_types(update_collector):
+            ) in field.dependant_fields_with_types(
+                field_cache, associated_relation_changed=True
+            ):
                 dependant_field_type.field_dependency_created(
                     dependant_field,
                     field,
-                    via_path_to_starting_table,
                     update_collector,
+                    field_cache,
+                    via_path_to_starting_table,
                 )
             if apply_and_send_updates:
-                updated_fields = update_collector.apply_updates_and_get_updated_fields()
+                updated_fields = update_collector.apply_updates_and_get_updated_fields(
+                    field_cache
+                )
                 ViewHandler().field_updated(updated_fields)
 
                 field_restored.send(
