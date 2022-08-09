@@ -225,7 +225,7 @@ services:
     depends_on:
       - backend
     environment:
-      <<: *common-backend-variables
+      <<: *backend-variables
     volumes:
       - media:/baserow/media
     networks:
