@@ -48,7 +48,36 @@ class LanguageFieldType(FieldType):
 class TranslationTextField(models.TextField):
     requires_refresh_after_update = True
 
-class TranslationFieldType(FieldType):
+
+class TransformationFieldType(FieldType):
+    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
+        # logger.info(f'get_field_dependencies')
+        if field_instance.source_field != None:
+            return [
+                FieldDependency(
+                    dependency=field_instance.source_field,
+                    dependant=field_instance
+                )
+            ]     
+        return []    
+
+    def after_create(self, field, model, user, connection, before):
+        self.update_all_rows(field)
+
+    def after_update(
+        self,
+        from_field,
+        to_field,
+        from_model,
+        to_model,
+        user,
+        connection,
+        altered_column,
+        before,
+    ):
+        self.update_all_rows(to_field)        
+
+class TranslationFieldType(TransformationFieldType):
     type = "translation"
     model_class = TranslationField
     allowed_fields = [
@@ -103,16 +132,6 @@ class TranslationFieldType(FieldType):
             **kwargs
         )
 
-    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
-        # logger.info(f'get_field_dependencies')
-        if field_instance.source_field != None:
-            return [
-                FieldDependency(
-                    dependency=field_instance.source_field,
-                    dependant=field_instance
-                )
-            ]     
-        return []
 
     def row_of_dependency_updated(
         self,
@@ -194,24 +213,8 @@ class TranslationFieldType(FieldType):
                                            source_field_id, 
                                            target_field_id)
 
-    def after_create(self, field, model, user, connection, before):
-        self.update_all_rows(field)
 
-    def after_update(
-        self,
-        from_field,
-        to_field,
-        from_model,
-        to_model,
-        user,
-        connection,
-        altered_column,
-        before,
-    ):
-        self.update_all_rows(to_field)
-
-
-class TransliterationFieldType(FieldType):
+class TransliterationFieldType(TransformationFieldType):
     type = "transliteration"
     model_class = TransliterationField
     allowed_fields = [
@@ -258,14 +261,6 @@ class TransliterationFieldType(FieldType):
             null=True, 
             **kwargs
         )
-
-    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
-        # logger.info(f'get_field_dependencies')
-        result = []
-        if field_instance.source_field != None:
-            result = [field_instance.source_field.name]
-        logger.info(f'get_field_dependencies: result {result}')
-        return result
 
     def row_of_dependency_updated(
         self,
@@ -315,24 +310,9 @@ class TransliterationFieldType(FieldType):
                                                 source_field_id, 
                                                 target_field_id)
 
-    def after_create(self, field, model, user, connection, before):
-        self.update_all_rows(field)
-
-    def after_update(
-        self,
-        from_field,
-        to_field,
-        from_model,
-        to_model,
-        user,
-        connection,
-        altered_column,
-        before,
-    ):
-        self.update_all_rows(to_field)
 
 
-class DictionaryLookupFieldType(FieldType):
+class DictionaryLookupFieldType(TransformationFieldType):
     type = "dictionary_lookup"
     model_class = DictionaryLookupField
     allowed_fields = [
@@ -380,13 +360,6 @@ class DictionaryLookupFieldType(FieldType):
             **kwargs
         )
 
-    def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
-        # logger.info(f'get_field_dependencies')
-        result = []
-        if field_instance.source_field != None:
-            result = [field_instance.source_field.name]
-        logger.info(f'get_field_dependencies: result {result}')
-        return result
 
     def row_of_dependency_updated(
         self,
@@ -434,21 +407,4 @@ class DictionaryLookupFieldType(FieldType):
                                         lookup_id, 
                                         source_field_id, 
                                         target_field_id)
-
-    def after_create(self, field, model, user, connection, before):
-        self.update_all_rows(field)
-
-    def after_update(
-        self,
-        from_field,
-        to_field,
-        from_model,
-        to_model,
-        user,
-        connection,
-        altered_column,
-        before,
-    ):
-        self.update_all_rows(to_field)
-
 

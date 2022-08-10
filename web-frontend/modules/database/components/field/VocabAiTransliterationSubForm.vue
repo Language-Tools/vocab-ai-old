@@ -80,7 +80,7 @@ export default {
       allFields = allFields.concat(fields);
 
       const allLanguageFields = allFields.filter((f) => {
-              return f.type == "language_text"
+              return f != undefined && f.type == "language_text"
             });
 
 
