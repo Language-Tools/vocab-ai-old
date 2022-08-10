@@ -101,8 +101,10 @@ export default {
       let allFields = [primaryField];
       allFields = allFields.concat(fields);
 
+      console.log('allFields: ', allFields);
+
       const allLanguageFields = allFields.filter((f) => {
-              return f.type == "language_text"
+              return f != undefined && f.type == "language_text"
             });
 
 
