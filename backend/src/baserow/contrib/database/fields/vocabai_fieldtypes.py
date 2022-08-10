@@ -8,6 +8,8 @@ from baserow.contrib.database.fields.registries import FieldType
 from baserow.contrib.database.fields.models import Field
 from baserow.contrib.database.views.handler import ViewHandler
 
+from .dependencies.models import FieldDependency
+
 from .vocabai_models import TranslationField, TransliterationField, LanguageField, DictionaryLookupField
 
 from .tasks import run_clt_translation_all_rows, run_clt_transliteration_all_rows, run_clt_lookup_all_rows
@@ -103,11 +105,14 @@ class TranslationFieldType(FieldType):
 
     def get_field_dependencies(self, field_instance: Field, field_lookup_cache: FieldCache):
         # logger.info(f'get_field_dependencies')
-        result = []
         if field_instance.source_field != None:
-            result = [field_instance.source_field.name]
-        logger.info(f'get_field_dependencies: result {result}')
-        return result
+            return [
+                FieldDependency(
+                    dependency=field_instance.source_field,
+                    dependant=field_instance
+                )
+            ]     
+        return []
 
     def row_of_dependency_updated(
         self,
