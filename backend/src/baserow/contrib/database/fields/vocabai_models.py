@@ -8,7 +8,7 @@ from baserow.contrib.database.fields.models import Field
 # ./dev.sh run backend manage migrate
 
 # undoing a migration:
-# ./dev.sh run backend manage migrate database 0071
+# ./dev.sh run backend manage migrate database 0084
 
 class LanguageField(Field):
     language = models.CharField(
