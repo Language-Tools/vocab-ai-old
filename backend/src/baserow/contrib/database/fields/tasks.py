@@ -2,6 +2,7 @@ from baserow.config.celery import app
 
 from baserow.contrib.database.table.models import Table
 from baserow.contrib.database.rows.signals import before_rows_update, rows_updated
+from baserow.contrib.database.table.signals import table_updated
 
 from baserow.contrib.database.cloudlanguagetools import instance as clt_instance
 
@@ -63,27 +64,34 @@ def process_row_id_bucket_iterate_rows(table_id, row_id_list):
         row = table_model.objects.get(id=row_id)
         row_list.append(row)
 
-    before_return = before_rows_update.send(
-        None,
-        rows=row_list,
-        user=None,
-        table=table,
-        model=table_model,
-        updated_field_ids=None,
-    )
+    size_cutoff = 50
+
+    if len(row_list) < size_cutoff:
+        before_return = before_rows_update.send(
+            None,
+            rows=row_list,
+            user=None,
+            table=table,
+            model=table_model,
+            updated_field_ids=None,
+        )
 
     for row in row_list:
         yield row
 
-    rows_updated.send(
-        None,
-        rows=row_list,
-        user=None,
-        table=table,
-        model=table_model,
-        before_return=before_return,
-        updated_field_ids=None
-    )
+    if len(row_list) < size_cutoff:
+        rows_updated.send(
+            None,
+            rows=row_list,
+            user=None,
+            table=table,
+            model=table_model,
+            before_return=before_return,
+            updated_field_ids=None
+        )
+    else:
+        # refresh whole table
+        table_updated.send(None, table=table, user=None, force_table_refresh=True)
 
 
 # translation 
